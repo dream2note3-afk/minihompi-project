@@ -1,6 +1,6 @@
 import React from 'react';
 import { ActiveTab, UserSession } from '../types';
-import { LayoutGrid, Image, Video, ShieldCheck, UserCheck } from 'lucide-react';
+import { LayoutGrid, Image, Video, ShieldCheck, UserCheck, Palette } from 'lucide-react';
 
 interface RightTabsProps {
   activeTab: ActiveTab;
@@ -31,6 +31,12 @@ export const RightTabs: React.FC<RightTabsProps> = ({
       label: '영상업로드\n(YouTube)',
       icon: <Video className="w-3.5 h-3.5 text-red-600" />,
       subtext: '유튜브 영상 링크'
+    },
+    {
+      id: 'edit_profile' as ActiveTab,
+      label: '아이콘 수정\n(프로필 설정)',
+      icon: <Palette className="w-3.5 h-3.5 text-[#ff7e39]" />,
+      subtext: '권용우의 아이콘 편집'
     },
     {
       id: 'admin' as ActiveTab,

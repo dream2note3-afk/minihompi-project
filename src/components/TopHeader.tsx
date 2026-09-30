@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { bgmEngine, BGM_PLAYLIST } from '../utils/audioSynth';
-import { Play, Pause, SkipForward, SkipBack, Volume2, VolumeX, Music } from 'lucide-react';
+import { bgmEngine, BgmTrack } from '../utils/audioSynth';
+import { Play, Pause, SkipForward, SkipBack, Volume2, VolumeX, Music, FolderUp, ListMusic } from 'lucide-react';
+import { BgmManagerModal } from './BgmManagerModal';
 
 interface TopHeaderProps {
   todayVisits: number;
@@ -10,9 +11,11 @@ interface TopHeaderProps {
 export const TopHeader: React.FC<TopHeaderProps> = ({ todayVisits, totalVisits }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(0.5);
-  const [currentTrack, setCurrentTrack] = useState(bgmEngine.getCurrentTrack());
+  const [currentTrack, setCurrentTrack] = useState<BgmTrack>(bgmEngine.getCurrentTrack());
   const [trackIndex, setTrackIndex] = useState(0);
+  const [playlist, setPlaylist] = useState<BgmTrack[]>(bgmEngine.getPlaylist());
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+  const [showBgmManager, setShowBgmManager] = useState(false);
   const [progress, setProgress] = useState(25);
 
   useEffect(() => {
@@ -21,6 +24,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ todayVisits, totalVisits }
       setVolume(bgmEngine.getVolume());
       setCurrentTrack(bgmEngine.getCurrentTrack());
       setTrackIndex(bgmEngine.getTrackIndex());
+      setPlaylist(bgmEngine.getPlaylist());
     });
     return unsubscribe;
   }, []);
@@ -102,19 +106,34 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ todayVisits, totalVisits }
               <Music className="w-3.5 h-3.5" />
             </div>
 
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setShowBgmManager(true)}>
               <div className="text-[11px] font-bold text-[#2d4050] truncate flex items-center gap-1">
                 <span className="text-[10px] text-[#ff6b2b] font-mono">BGM</span>
-                <span className="truncate">{currentTrack.title}</span>
+                <span className="truncate hover:text-[#ff6b2b] transition-colors">{currentTrack.title}</span>
+                {currentTrack.isCustom && (
+                  <span className="text-[9px] bg-[#e6f4ea] text-[#137333] px-1 py-0.2 rounded font-mono font-bold shrink-0">
+                    MY
+                  </span>
+                )}
               </div>
-              <div className="text-[10px] text-[#6b8290] truncate">
-                {currentTrack.artist} ({trackIndex + 1}/{BGM_PLAYLIST.length})
+              <div className="text-[10px] text-[#6b8290] truncate flex items-center gap-1">
+                <span className="truncate">{currentTrack.artist}</span>
+                <span>({trackIndex + 1}/{playlist.length})</span>
               </div>
             </div>
           </div>
 
           {/* Controller & Progress Bar */}
           <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+            {/* Direct Music Upload Button */}
+            <button
+              onClick={() => setShowBgmManager(true)}
+              className="px-2 py-1 bg-white hover:bg-[#ffece0] text-[#e05619] hover:text-[#c4430a] border border-[#ffcdb5] rounded text-[10px] font-bold flex items-center gap-1 shadow-2xs transition-colors shrink-0 cursor-pointer"
+              title="배경음악 직접 올리기 & 재생목록 관리"
+            >
+              <FolderUp className="w-3 h-3" />
+              <span>음악 올리기</span>
+            </button>
             {/* Play/Pause & Skip buttons */}
             <div className="flex items-center gap-1">
               <button
@@ -185,6 +204,12 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ todayVisits, totalVisits }
         </div>
 
       </div>
+
+      {/* BGM Management Modal */}
+      <BgmManagerModal
+        isOpen={showBgmManager}
+        onClose={() => setShowBgmManager(false)}
+      />
     </header>
   );
 };

@@ -1,20 +1,28 @@
-import React, { useState } from 'react';
-import { UserSession } from '../types';
-import { Heart, Camera, Youtube, Facebook, ExternalLink, Sparkles, Copy, Check } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { UserSession, ProfileConfig } from '../types';
+import { ProfileAvatarVisual } from './ProfileAvatarVisual';
+import { Heart, Camera, Youtube, Facebook, ExternalLink, Sparkles, Copy, Check, Settings2, Edit3, Upload, FolderUp } from 'lucide-react';
 
 interface LeftSidebarProps {
   session: UserSession | null;
   onOpenAdminLogin: () => void;
+  onOpenEditProfile: () => void;
+  onQuickFileUpload?: (file: File) => void;
   mediaCount: { youtube: number; facebook: number };
+  profile: ProfileConfig;
 }
 
 export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   session,
   onOpenAdminLogin,
-  mediaCount
+  onOpenEditProfile,
+  onQuickFileUpload,
+  mediaCount,
+  profile
 }) => {
   const [copied, setCopied] = useState(false);
   const [selectedMood, setSelectedMood] = useState('🎬 촬영&편집중');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const moods = ['🎬 촬영&편집중', '☕️ 커피타임', '✨ 영감충전', '📷 야외출사', '🌿 힐링'];
 
@@ -24,8 +32,24 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && onQuickFileUpload) {
+      onQuickFileUpload(file);
+    }
+  };
+
   return (
     <aside className="w-full md:w-56 shrink-0 flex flex-col gap-3 text-[#333333]">
+      {/* Hidden File Input for Direct Sidebar File Upload */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
+        className="hidden"
+      />
+
       {/* Today Mood Badge */}
       <div className="bg-[#f2f7f9] border border-[#c4d7e0] rounded-md px-2.5 py-1.5 flex items-center justify-between text-xs">
         <span className="font-bold text-[#1f4e79] text-[11px] tracking-wide">TODAY IS...</span>
@@ -44,59 +68,68 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
 
       {/* Profile Photo Area */}
       <div className="bg-white border border-[#bed2dc] rounded-lg p-2.5 shadow-xs flex flex-col items-center">
-        {/* Profile Image with frame */}
+        {/* Profile Image with frame & visual */}
         <div className="relative w-full aspect-square max-w-[180px] rounded-md overflow-hidden border border-[#9dbbca] shadow-inner bg-[#eaf1f5] group">
-          {/* Stylized Studio Director Kwon Yong-woo Profile Illustration */}
-          <svg className="w-full h-full" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect width="200" height="200" fill="#E2EBF0" />
-            {/* Studio warm background */}
-            <circle cx="100" cy="85" r="75" fill="#F4E8D8" />
-            <path d="M0 160C40 145 160 145 200 160V200H0V160Z" fill="#3D5060" />
-            {/* Person avatar */}
-            <circle cx="100" cy="72" r="32" fill="#FADBC7" />
-            {/* Hair */}
-            <path d="M68 68C68 45 82 38 100 38C118 38 132 45 132 68C132 74 125 70 120 62C110 65 95 62 80 62C75 70 68 74 68 68Z" fill="#2B2D42" />
-            {/* Eyes & Warm Smile */}
-            <circle cx="88" cy="70" r="3" fill="#2B2D42" />
-            <circle cx="112" cy="70" r="3" fill="#2B2D42" />
-            <path d="M93 82C97 86 103 86 107 82" stroke="#2B2D42" strokeWidth="2.5" strokeLinecap="round" />
-            {/* Retro glasses */}
-            <circle cx="88" cy="70" r="10" stroke="#715B4C" strokeWidth="2" fill="none" />
-            <circle cx="112" cy="70" r="10" stroke="#715B4C" strokeWidth="2" fill="none" />
-            <line x1="98" y1="70" x2="102" y2="70" stroke="#715B4C" strokeWidth="2" />
-            {/* Camera strap & body */}
-            <path d="M85 105L70 145L130 145L115 105Z" fill="#5C6F84" />
-            <rect x="82" y="125" width="36" height="24" rx="4" fill="#1A1A1A" stroke="#C0C0C0" strokeWidth="2" />
-            <circle cx="100" cy="137" r="8" fill="#3A75C4" stroke="#88B04B" strokeWidth="1.5" />
-            <rect x="108" y="121" width="8" height="4" fill="#D32F2F" rx="1" />
-          </svg>
+          <ProfileAvatarVisual config={profile} />
 
           {/* Badge over photo */}
           <div className="absolute bottom-1 right-1 bg-black/60 backdrop-blur-xs text-white text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1 font-mono">
             <Camera className="w-2.5 h-2.5 text-[#ff9f43]" />
-            <span>DIRECTOR</span>
+            <span>{profile.roleBadgeText || 'DIRECTOR'}</span>
+          </div>
+
+          {/* Quick upload & edit overlay buttons on hover */}
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-2xs opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 p-2">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full py-1 px-2 bg-[#ff6b2b] hover:bg-[#e05619] text-white rounded text-[11px] font-bold shadow-xs flex items-center justify-center gap-1 transition-all active:scale-95"
+              title="내 컴퓨터에서 사진 화일로 직접 변경"
+            >
+              <FolderUp className="w-3 h-3" />
+              <span>사진 화일 변경</span>
+            </button>
+
+            <button
+              onClick={onOpenEditProfile}
+              className="w-full py-1 px-2 bg-white/90 hover:bg-white text-[#1f3a52] rounded text-[10px] font-medium shadow-xs flex items-center justify-center gap-1 transition-all"
+              title="아이콘 상세 수정 메뉴 열기"
+            >
+              <Settings2 className="w-3 h-3" />
+              <span>아이콘 설정</span>
+            </button>
           </div>
         </div>
 
-        {/* Name: '권용우의 아이콘' + small red button mark */}
-        <div className="mt-2.5 flex items-center justify-center gap-1.5 text-center">
+        {/* Name: '권용우의 아이콘' + small colored button mark + Edit Icon button */}
+        <div className="mt-2.5 flex items-center justify-center gap-1.5 text-center flex-wrap">
           <span className="text-xs font-bold text-[#1a2f3f] tracking-tight">
-            권용우의 아이콘
+            {profile.iconTitle}
           </span>
-          {/* Small red button mark specified in user prompt */}
+          {/* Small button mark with customizable color */}
           <span
-            className="w-2.5 h-2.5 rounded-full bg-[#e63946] border border-[#a81c28] shadow-xs inline-block animate-pulse"
-            title="현재 활동 중 (ON)"
+            className="w-2.5 h-2.5 rounded-full shadow-xs inline-block animate-pulse shrink-0"
+            style={{ backgroundColor: profile.statusDotColor }}
+            title={profile.statusDotTitle}
           />
+
+          {/* Direct "아이콘 수정" button */}
+          <button
+            onClick={onOpenEditProfile}
+            className="ml-0.5 px-1.5 py-0.5 bg-[#f4f7f9] hover:bg-[#ffece0] hover:text-[#ff6b2b] border border-[#bcd0dc] rounded text-[10px] text-[#4d697c] flex items-center gap-0.5 transition-colors cursor-pointer"
+            title="권용우의 아이콘 수정하기"
+          >
+            <Edit3 className="w-2.5 h-2.5" />
+            <span>수정</span>
+          </button>
         </div>
 
-        {/* Korean introduction: “권용우의 스튜디오 방문을 환영합니다!“ */}
+        {/* Korean introduction */}
         <div className="mt-2 w-full p-2 bg-[#f8fafb] border border-[#d9e5ec] rounded text-center">
           <p className="text-xs leading-relaxed text-[#2c3e50] font-medium break-keep">
-            “권용우의 스튜디오 방문을 환영합니다!“
+            {profile.welcomeMessage}
           </p>
           <p className="mt-1 text-[11px] text-[#6d8494] break-keep">
-            일상의 찰나와 시네마틱 스냅을 유튜브 영상과 페이스북 사진으로 기록합니다.
+            {profile.subMessage}
           </p>
         </div>
 

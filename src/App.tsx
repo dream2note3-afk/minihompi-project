@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { MediaItem, GuestbookEntry, UserSession, ActiveTab } from './types';
-import { INITIAL_MEDIA_ITEMS, INITIAL_GUESTBOOK_ENTRIES } from './data/initialData';
+import { MediaItem, GuestbookEntry, UserSession, ActiveTab, ProfileConfig } from './types';
+import { INITIAL_MEDIA_ITEMS, INITIAL_GUESTBOOK_ENTRIES, INITIAL_PROFILE_CONFIG } from './data/initialData';
 import { TopHeader } from './components/TopHeader';
 import { LeftSidebar } from './components/LeftSidebar';
 import { RightTabs } from './components/RightTabs';
@@ -13,13 +13,15 @@ import { MediaGallery } from './components/MediaGallery';
 import { FacebookUploadModal } from './components/FacebookUploadModal';
 import { YoutubeUploadModal } from './components/YoutubeUploadModal';
 import { AdminLoginModal } from './components/AdminLoginModal';
+import { EditIconPanel } from './components/EditIconPanel';
 import { Guestbook } from './components/Guestbook';
 
 const STORAGE_KEYS = {
   MEDIA: 'kwon_studio_media_v1',
   GUESTBOOK: 'kwon_studio_guestbook_v1',
   SESSION: 'kwon_studio_session_v1',
-  VISITS: 'kwon_studio_visits_v1'
+  VISITS: 'kwon_studio_visits_v1',
+  PROFILE: 'kwon_studio_profile_v1'
 };
 
 const ADMIN_EMAIL = 'dream2note3@gmail.com';
@@ -45,6 +47,17 @@ export default function App() {
       // fallback
     }
     return INITIAL_GUESTBOOK_ENTRIES;
+  });
+
+  // Profile / Icon configuration state with localStorage
+  const [profile, setProfile] = useState<ProfileConfig>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.PROFILE);
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // fallback
+    }
+    return INITIAL_PROFILE_CONFIG;
   });
 
   // User session state
@@ -86,6 +99,14 @@ export default function App() {
       console.warn('Storage sync error', e);
     }
   }, [guestbookEntries]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(profile));
+    } catch (e) {
+      console.warn('Storage sync error', e);
+    }
+  }, [profile]);
 
   useEffect(() => {
     try {
@@ -184,9 +205,68 @@ export default function App() {
     }
   };
 
+  const handleSaveProfileConfig = (newConfig: ProfileConfig) => {
+    setProfile(newConfig);
+  };
+
+  const handleQuickFileUpload = (file: File) => {
+    if (!file || !file.type.startsWith('image/')) {
+      alert('이미지 파일만 업로드할 수 있습니다.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (!dataUrl) return;
+
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 500;
+        let width = img.width;
+        let height = img.height;
+        if (width > height) {
+          if (width > maxDim) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          }
+        } else {
+          if (height > maxDim) {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const optimized = canvas.toDataURL('image/jpeg', 0.9);
+          setProfile((prev) => ({
+            ...prev,
+            avatarType: 'uploaded_file',
+            uploadedFileDataUrl: optimized,
+            uploadedFileName: file.name
+          }));
+        } else {
+          setProfile((prev) => ({
+            ...prev,
+            avatarType: 'uploaded_file',
+            uploadedFileDataUrl: dataUrl,
+            uploadedFileName: file.name
+          }));
+        }
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleResetData = () => {
     setMediaItems(INITIAL_MEDIA_ITEMS);
     setGuestbookEntries(INITIAL_GUESTBOOK_ENTRIES);
+    setProfile(INITIAL_PROFILE_CONFIG);
   };
 
   const mediaCount = {
@@ -210,7 +290,10 @@ export default function App() {
             <LeftSidebar
               session={session}
               onOpenAdminLogin={() => setActiveTab('admin')}
+              onOpenEditProfile={() => setActiveTab('edit_profile')}
+              onQuickFileUpload={handleQuickFileUpload}
               mediaCount={mediaCount}
+              profile={profile}
             />
           </div>
 
@@ -232,6 +315,7 @@ export default function App() {
                     {activeTab === 'gallery' && '스튜디오 갤러리 (사진 & 영상 모아보기)'}
                     {activeTab === 'upload_facebook' && '페이스북 사진 업로드 및 링크 관리'}
                     {activeTab === 'upload_youtube' && '유튜브 영상 등록 및 연동 관리'}
+                    {activeTab === 'edit_profile' && '권용우의 아이콘 수정 (프로필 & 아바타 커스텀)'}
                     {activeTab === 'admin' && '관리자 센터 (dream2note3@gmail.com)'}
                   </h2>
                 </div>
@@ -267,6 +351,16 @@ export default function App() {
                   session={session}
                   onOpenAdminLogin={() => setActiveTab('admin')}
                   onSuccessReturn={() => setActiveTab('gallery')}
+                />
+              )}
+
+              {activeTab === 'edit_profile' && (
+                <EditIconPanel
+                  currentConfig={profile}
+                  onSaveConfig={handleSaveProfileConfig}
+                  session={session}
+                  onOpenAdminLogin={() => setActiveTab('admin')}
+                  onReturnToGallery={() => setActiveTab('gallery')}
                 />
               )}
 

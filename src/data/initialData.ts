@@ -1,4 +1,15 @@
-import { MediaItem, GuestbookEntry } from '../types';
+import { MediaItem, GuestbookEntry, ProfileConfig } from '../types';
+
+export const INITIAL_PROFILE_CONFIG: ProfileConfig = {
+  iconTitle: '권용우의 아이콘',
+  avatarType: 'preset_director',
+  customImageUrl: '',
+  statusDotColor: '#e63946',
+  statusDotTitle: '현재 활동 중 (ON)',
+  welcomeMessage: '“권용우의 스튜디오 방문을 환영합니다!“',
+  subMessage: '일상의 찰나와 시네마틱 스냅을 유튜브 영상과 페이스북 사진으로 기록합니다.',
+  roleBadgeText: 'DIRECTOR'
+};
 
 export const INITIAL_MEDIA_ITEMS: MediaItem[] = [
   {
