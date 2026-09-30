@@ -45,4 +45,43 @@ export interface ProfileConfig {
   roleBadgeText: string; // e.g. 'DIRECTOR'
 }
 
-export type ActiveTab = 'gallery' | 'upload_facebook' | 'upload_youtube' | 'edit_profile' | 'admin';
+export type TravelCategory = 'travel' | 'food' | 'cafe' | 'photoslot';
+
+export interface TravelSpot {
+  id: string;
+  name: string;
+  category: TravelCategory;
+  region: string;
+  linkUrl: string;
+  linkName?: string;
+  imageUrl: string;
+  rating: number;
+  recommendedMenuOrTip: string;
+  description: string;
+  tags: string[];
+  pinned?: boolean;
+  dateAdded: string;
+}
+
+export type CdStatus = 'reviewing' | 'planned' | 'purchased' | 'wishlist';
+export type CdCategory = 'album' | 'online_store' | 'offline_shop' | 'rare_cd';
+
+export interface CdReviewItem {
+  id: string;
+  title: string;
+  artistOrSeller: string;
+  category: CdCategory;
+  status: CdStatus;
+  price?: string;
+  storeUrl: string;
+  storeName: string;
+  coverImageUrl: string;
+  releaseYear?: string;
+  reviewComment: string;
+  keyTracks?: string[];
+  rating?: number;
+  pinned?: boolean;
+  dateAdded: string;
+}
+
+export type ActiveTab = 'gallery' | 'upload_facebook' | 'upload_youtube' | 'travel_food' | 'cd_review' | 'edit_profile' | 'admin';

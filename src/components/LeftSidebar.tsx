@@ -1,15 +1,16 @@
 import React, { useState, useRef } from 'react';
-import { UserSession, ProfileConfig } from '../types';
+import { UserSession, ProfileConfig, ActiveTab } from '../types';
 import { ProfileAvatarVisual } from './ProfileAvatarVisual';
-import { Heart, Camera, Youtube, Facebook, ExternalLink, Sparkles, Copy, Check, Settings2, Edit3, Upload, FolderUp } from 'lucide-react';
+import { Heart, Camera, Youtube, Facebook, ExternalLink, Sparkles, Copy, Check, Settings2, Edit3, Upload, FolderUp, MapPin, Disc3 } from 'lucide-react';
 
 interface LeftSidebarProps {
   session: UserSession | null;
   onOpenAdminLogin: () => void;
   onOpenEditProfile: () => void;
   onQuickFileUpload?: (file: File) => void;
-  mediaCount: { youtube: number; facebook: number };
+  mediaCount: { youtube: number; facebook: number; travel?: number; cd?: number };
   profile: ProfileConfig;
+  onSelectTab?: (tab: ActiveTab) => void;
 }
 
 export const LeftSidebar: React.FC<LeftSidebarProps> = ({
@@ -18,7 +19,8 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   onOpenEditProfile,
   onQuickFileUpload,
   mediaCount,
-  profile
+  profile,
+  onSelectTab
 }) => {
   const [copied, setCopied] = useState(false);
   const [selectedMood, setSelectedMood] = useState('🎬 촬영&편집중');
@@ -162,7 +164,11 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
 
         {/* Content summary counters */}
         <div className="mt-2 w-full grid grid-cols-2 gap-1 text-[11px]">
-          <div className="bg-[#f0f6fa] border border-[#d2e2eb] rounded p-1.5 text-center">
+          <div
+            onClick={() => onSelectTab && onSelectTab('gallery')}
+            className="bg-[#f0f6fa] border border-[#d2e2eb] rounded p-1.5 text-center cursor-pointer hover:bg-[#e4eef5] transition-colors"
+            title="영상 목록 보기"
+          >
             <div className="flex items-center justify-center gap-1 text-red-600 font-bold">
               <Youtube className="w-3 h-3" />
               <span>영상</span>
@@ -171,13 +177,46 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
               {mediaCount.youtube}개
             </span>
           </div>
-          <div className="bg-[#f0f6fa] border border-[#d2e2eb] rounded p-1.5 text-center">
+
+          <div
+            onClick={() => onSelectTab && onSelectTab('gallery')}
+            className="bg-[#f0f6fa] border border-[#d2e2eb] rounded p-1.5 text-center cursor-pointer hover:bg-[#e4eef5] transition-colors"
+            title="사진 목록 보기"
+          >
             <div className="flex items-center justify-center gap-1 text-blue-600 font-bold">
               <Facebook className="w-3 h-3" />
               <span>사진</span>
             </div>
             <span className="font-mono text-xs font-semibold text-[#1e3442]">
               {mediaCount.facebook}장
+            </span>
+          </div>
+
+          <div
+            onClick={() => onSelectTab && onSelectTab('travel_food')}
+            className="bg-[#f0faf5] border border-[#cbe8d8] rounded p-1.5 text-center cursor-pointer hover:bg-[#e1f5eb] transition-colors"
+            title="국내 여행&맛집 보기"
+          >
+            <div className="flex items-center justify-center gap-1 text-emerald-600 font-bold">
+              <MapPin className="w-3 h-3" />
+              <span>여행·맛집</span>
+            </div>
+            <span className="font-mono text-xs font-semibold text-[#1e3442]">
+              {mediaCount.travel ?? 0}곳
+            </span>
+          </div>
+
+          <div
+            onClick={() => onSelectTab && onSelectTab('cd_review')}
+            className="bg-[#f2f4fb] border border-[#cbd5e8] rounded p-1.5 text-center cursor-pointer hover:bg-[#e4eaf8] transition-colors"
+            title="구매CD 검토 보기"
+          >
+            <div className="flex items-center justify-center gap-1 text-[#3b82f6] font-bold">
+              <Disc3 className="w-3 h-3" />
+              <span>구매CD</span>
+            </div>
+            <span className="font-mono text-xs font-semibold text-[#1e3442]">
+              {mediaCount.cd ?? 0}건
             </span>
           </div>
         </div>

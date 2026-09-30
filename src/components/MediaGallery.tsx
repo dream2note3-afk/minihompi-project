@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { MediaItem } from '../types';
-import { Youtube, Facebook, Play, Heart, Eye, ExternalLink, Trash2, Pin, Sparkles, Search, Film, Image as ImageIcon } from 'lucide-react';
-import { getYouTubeEmbedUrl } from '../utils/youtube';
+import { MediaItem, MediaType } from '../types';
+import { Youtube, Facebook, Play, Heart, Eye, ExternalLink, Trash2, Pin, Sparkles, Search, Film, Image as ImageIcon, Edit3, Check, X } from 'lucide-react';
+import { getYouTubeEmbedUrl, extractYouTubeId, getYouTubeThumbnail } from '../utils/youtube';
 
 interface MediaGalleryProps {
   items: MediaItem[];
   onToggleLike: (id: string) => void;
   onDeleteItem: (id: string) => void;
   onTogglePin: (id: string) => void;
+  onUpdateItem: (id: string, updated: Partial<MediaItem>) => void;
   isAdmin: boolean;
 }
 
@@ -16,12 +17,73 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({
   onToggleLike,
   onDeleteItem,
   onTogglePin,
+  onUpdateItem,
   isAdmin
 }) => {
   const [filterType, setFilterType] = useState<'all' | 'youtube' | 'facebook'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedVideo, setSelectedVideo] = useState<MediaItem | null>(null);
   const [selectedPhoto, setSelectedPhoto] = useState<MediaItem | null>(null);
+  const [editingMedia, setEditingMedia] = useState<MediaItem | null>(null);
+
+  // Edit Form States
+  const [editTitle, setEditTitle] = useState('');
+  const [editType, setEditType] = useState<MediaType>('youtube');
+  const [editUrl, setEditUrl] = useState('');
+  const [editThumbnailUrl, setEditThumbnailUrl] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editAlbum, setEditAlbum] = useState('');
+  const [editTagsInput, setEditTagsInput] = useState('');
+  const [editIsPinned, setEditIsPinned] = useState(false);
+
+  const handleOpenEdit = (item: MediaItem) => {
+    setEditingMedia(item);
+    setEditTitle(item.title);
+    setEditType(item.type);
+    setEditUrl(item.url);
+    setEditThumbnailUrl(item.thumbnailUrl);
+    setEditDescription(item.description);
+    setEditAlbum(item.album || '');
+    setEditTagsInput(item.tags.join(', '));
+    setEditIsPinned(!!item.pinned);
+  };
+
+  const handleSaveEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMedia || !editTitle.trim() || !editUrl.trim()) return;
+
+    let ytId = editingMedia.youtubeId;
+    let thumb = editThumbnailUrl.trim();
+
+    if (editType === 'youtube') {
+      const extracted = extractYouTubeId(editUrl);
+      if (extracted) {
+        ytId = extracted;
+        if (!thumb || thumb.includes('img.youtube.com')) {
+          thumb = getYouTubeThumbnail(extracted);
+        }
+      }
+    }
+
+    const tags = editTagsInput
+      .split(',')
+      .map((t) => t.trim().replace(/^#/, ''))
+      .filter((t) => t.length > 0);
+
+    onUpdateItem(editingMedia.id, {
+      title: editTitle.trim(),
+      type: editType,
+      url: editUrl.trim(),
+      thumbnailUrl: thumb || editingMedia.thumbnailUrl,
+      youtubeId: ytId,
+      description: editDescription.trim(),
+      album: editAlbum.trim() || undefined,
+      tags: tags.length > 0 ? tags : editingMedia.tags,
+      pinned: editIsPinned
+    });
+
+    setEditingMedia(null);
+  };
 
   const filteredItems = items.filter((item) => {
     if (filterType !== 'all' && item.type !== filterType) return false;
@@ -231,7 +293,7 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({
                         <ExternalLink className="w-3 h-3" />
                       </a>
 
-                      {/* Admin Tools: Pin & Delete */}
+                      {/* Admin Tools: Pin, Edit & Delete */}
                       {isAdmin && (
                         <>
                           <button
@@ -242,6 +304,13 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({
                             title={item.pinned ? '대표작 해제' : '대표작 지정'}
                           >
                             <Pin className="w-3 h-3 fill-current" />
+                          </button>
+                          <button
+                            onClick={() => handleOpenEdit(item)}
+                            className="p-1 rounded text-[#8da4b3] hover:text-[#2b7294] transition-colors"
+                            title="내용 수정하기"
+                          >
+                            <Edit3 className="w-3 h-3" />
                           </button>
                           <button
                             onClick={() => onDeleteItem(item.id)}
@@ -318,15 +387,31 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({
             {/* Modal Footer */}
             <div className="p-3 bg-[#fafcfd] text-xs text-[#486375] flex items-center justify-between">
               <p className="text-[11px] truncate flex-1 mr-2">{selectedVideo.description}</p>
-              <a
-                href={selectedVideo.url}
-                target="_blank"
-                rel="noreferrer"
-                className="px-2.5 py-1 bg-white border border-[#b8ced8] text-[#2b7294] font-medium rounded text-[11px] flex items-center gap-1 hover:bg-[#e8f2f6] shrink-0"
-              >
-                <span>새 탭에서 열기</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {isAdmin && (
+                  <button
+                    onClick={() => {
+                      const item = selectedVideo;
+                      setSelectedVideo(null);
+                      handleOpenEdit(item);
+                    }}
+                    className="px-2.5 py-1 bg-white border border-[#b8ced8] text-[#2b7294] font-medium rounded text-[11px] flex items-center gap-1 hover:bg-[#e8f2f6] cursor-pointer"
+                    title="영상 정보 수정"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                    <span>수정</span>
+                  </button>
+                )}
+                <a
+                  href={selectedVideo.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-2.5 py-1 bg-white border border-[#b8ced8] text-[#2b7294] font-medium rounded text-[11px] flex items-center gap-1 hover:bg-[#e8f2f6] shrink-0"
+                >
+                  <span>새 탭에서 열기</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
             </div>
           </div>
         </div>
@@ -382,18 +467,228 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({
                   <span>·</span>
                   <span>좋아요 {selectedPhoto.likes}개</span>
                 </div>
-                <a
-                  href={selectedPhoto.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-3 py-1 bg-[#1877f2] hover:bg-[#1567d3] text-white font-medium rounded text-xs flex items-center gap-1 shadow-2xs"
-                >
-                  <Facebook className="w-3 h-3 fill-current" />
-                  <span>페이스북 원본 게시물 보기</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
+                <div className="flex items-center gap-1.5">
+                  {isAdmin && (
+                    <button
+                      onClick={() => {
+                        const item = selectedPhoto;
+                        setSelectedPhoto(null);
+                        handleOpenEdit(item);
+                      }}
+                      className="px-2.5 py-1 bg-white border border-[#b8ced8] text-[#2b7294] font-medium rounded text-xs flex items-center gap-1 hover:bg-[#e8f2f6] cursor-pointer"
+                      title="사진 정보 수정"
+                    >
+                      <Edit3 className="w-3 h-3" />
+                      <span>수정</span>
+                    </button>
+                  )}
+                  <a
+                    href={selectedPhoto.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-1 bg-[#1877f2] hover:bg-[#1567d3] text-white font-medium rounded text-xs flex items-center gap-1 shadow-2xs"
+                  >
+                    <Facebook className="w-3 h-3 fill-current" />
+                    <span>페이스북 원본 게시물 보기</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Media Modal */}
+      {editingMedia && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fadeIn"
+          onClick={() => setEditingMedia(null)}
+        >
+          <div
+            className="bg-white border-2 border-[#2b7294] rounded-xl max-w-xl w-full max-h-[90vh] overflow-y-auto shadow-2xl p-4 flex flex-col gap-3.5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-2 border-b border-[#e2edf2]">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-[#2b7294] text-white flex items-center justify-center shadow-xs">
+                  <Edit3 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-[#1f374a]">
+                    사진 &amp; 영상 콘텐츠 정보 수정
+                  </h3>
+                  <p className="text-[11px] text-[#6d8494]">
+                    등록된 영상 또는 사진의 제목, 설명, 앨범명, 링크 및 썸네일을 수정합니다.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setEditingMedia(null)}
+                className="w-6 h-6 flex items-center justify-center rounded-full text-[#6d8494] hover:bg-[#e4eff4] text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Thumbnail Preview Banner */}
+            <div className="flex items-center gap-3 p-2 bg-[#f4f8fa] border border-[#d2e2eb] rounded-lg">
+              <div className="w-20 h-12 bg-black rounded overflow-hidden shrink-0">
+                <img
+                  src={editThumbnailUrl || editingMedia.thumbnailUrl}
+                  alt="미리보기"
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = 'none';
+                  }}
+                />
+              </div>
+              <div className="text-[11px] text-[#4d6678] min-w-0 flex-1">
+                <span className="font-bold text-[#203a4c] block truncate">{editTitle || '제목 없음'}</span>
+                <span className="text-[10px] text-[#718c9e] font-mono block">
+                  {editType === 'youtube' ? '유튜브 비디오' : '페이스북 사진'} · 등록일: {editingMedia.date}
+                </span>
+              </div>
+            </div>
+
+            {/* Edit Form */}
+            <form onSubmit={handleSaveEdit} className="flex flex-col gap-3">
+              {/* Title & Type */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-[#2a3f50] mb-1">
+                    콘텐츠 제목 <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    placeholder="제목을 입력하세요"
+                    className="w-full p-2 bg-white border border-[#bed2dc] rounded text-xs text-[#2a3f50] focus:border-[#2b7294] outline-hidden font-bold"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#2a3f50] mb-1">
+                    미디어 종류
+                  </label>
+                  <select
+                    value={editType}
+                    onChange={(e) => setEditType(e.target.value as MediaType)}
+                    className="w-full p-2 bg-white border border-[#bed2dc] rounded text-xs text-[#2a3f50] focus:border-[#2b7294] outline-hidden font-medium"
+                  >
+                    <option value="youtube">유튜브 영상</option>
+                    <option value="facebook">페이스북 사진</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* URL */}
+              <div>
+                <label className="block text-xs font-bold text-[#2a3f50] mb-1">
+                  원본 링크 URL <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="url"
+                  value={editUrl}
+                  onChange={(e) => setEditUrl(e.target.value)}
+                  placeholder="https://www.youtube.com/... 또는 https://www.facebook.com/..."
+                  className="w-full p-2 bg-white border border-[#bed2dc] rounded text-xs text-[#2a3f50] focus:border-[#2b7294] outline-hidden font-mono"
+                  required
+                />
+              </div>
+
+              {/* Thumbnail URL & Album */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-bold text-[#2a3f50] mb-1">
+                    썸네일 이미지 주소 (URL)
+                  </label>
+                  <input
+                    type="url"
+                    value={editThumbnailUrl}
+                    onChange={(e) => setEditThumbnailUrl(e.target.value)}
+                    placeholder="이미지 주소 URL (미입력 시 기존 유지)"
+                    className="w-full p-2 bg-white border border-[#bed2dc] rounded text-xs text-[#2a3f50] focus:border-[#2b7294] outline-hidden font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#2a3f50] mb-1">
+                    앨범 / 카테고리명
+                  </label>
+                  <input
+                    type="text"
+                    value={editAlbum}
+                    onChange={(e) => setEditAlbum(e.target.value)}
+                    placeholder="예: 시네마틱 필름, 서울 스냅, 계절의 기록"
+                    className="w-full p-2 bg-white border border-[#bed2dc] rounded text-xs text-[#2a3f50] focus:border-[#2b7294] outline-hidden"
+                  />
+                </div>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-xs font-bold text-[#2a3f50] mb-1">
+                  상세 설명 및 소개글
+                </label>
+                <textarea
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  rows={2}
+                  placeholder="영상이나 사진의 촬영 배경, 비하인드 스토리, 사용 장비 등을 적어주세요."
+                  className="w-full p-2 bg-white border border-[#bed2dc] rounded text-xs text-[#2a3f50] focus:border-[#2b7294] outline-hidden resize-none leading-relaxed"
+                />
+              </div>
+
+              {/* Tags & Pin */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-[#e2edf2]">
+                <div className="flex-1">
+                  <label className="block text-[11px] font-bold text-[#2a3f50] mb-0.5">
+                    해시태그 (쉼표 구분)
+                  </label>
+                  <input
+                    type="text"
+                    value={editTagsInput}
+                    onChange={(e) => setEditTagsInput(e.target.value)}
+                    placeholder="시네마틱, 필름스냅, 서울, 4K"
+                    className="w-full p-1.5 bg-white border border-[#bed2dc] rounded text-xs text-[#2a3f50]"
+                  />
+                </div>
+
+                <label className="flex items-center gap-1.5 cursor-pointer mt-2 sm:mt-4 text-xs font-medium text-[#2d4253]">
+                  <input
+                    type="checkbox"
+                    checked={editIsPinned}
+                    onChange={(e) => setEditIsPinned(e.target.checked)}
+                    className="accent-[#ff6b2b]"
+                  />
+                  <span>대표작(상단 고정)으로 설정</span>
+                </label>
+              </div>
+
+              {/* Actions */}
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-[#e2edf2]">
+                <button
+                  type="button"
+                  onClick={() => setEditingMedia(null)}
+                  className="px-3 py-1.5 bg-white border border-[#bed2dc] text-[#556e80] rounded text-xs font-medium"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 bg-[#2b7294] hover:bg-[#205b77] text-white rounded text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>수정 내용 저장</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

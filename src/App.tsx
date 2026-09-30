@@ -4,14 +4,16 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { MediaItem, GuestbookEntry, UserSession, ActiveTab, ProfileConfig } from './types';
-import { INITIAL_MEDIA_ITEMS, INITIAL_GUESTBOOK_ENTRIES, INITIAL_PROFILE_CONFIG } from './data/initialData';
+import { MediaItem, GuestbookEntry, UserSession, ActiveTab, ProfileConfig, TravelSpot, CdReviewItem } from './types';
+import { INITIAL_MEDIA_ITEMS, INITIAL_GUESTBOOK_ENTRIES, INITIAL_PROFILE_CONFIG, INITIAL_TRAVEL_SPOTS, INITIAL_CD_REVIEWS } from './data/initialData';
 import { TopHeader } from './components/TopHeader';
 import { LeftSidebar } from './components/LeftSidebar';
 import { RightTabs } from './components/RightTabs';
 import { MediaGallery } from './components/MediaGallery';
 import { FacebookUploadModal } from './components/FacebookUploadModal';
 import { YoutubeUploadModal } from './components/YoutubeUploadModal';
+import { TravelFoodGallery } from './components/TravelFoodGallery';
+import { CdReviewGallery } from './components/CdReviewGallery';
 import { AdminLoginModal } from './components/AdminLoginModal';
 import { EditIconPanel } from './components/EditIconPanel';
 import { Guestbook } from './components/Guestbook';
@@ -21,7 +23,9 @@ const STORAGE_KEYS = {
   GUESTBOOK: 'kwon_studio_guestbook_v1',
   SESSION: 'kwon_studio_session_v1',
   VISITS: 'kwon_studio_visits_v1',
-  PROFILE: 'kwon_studio_profile_v1'
+  PROFILE: 'kwon_studio_profile_v1',
+  TRAVEL: 'kwon_studio_travel_v1',
+  CD_REVIEWS: 'kwon_studio_cd_reviews_v1'
 };
 
 const ADMIN_EMAIL = 'dream2note3@gmail.com';
@@ -58,6 +62,28 @@ export default function App() {
       // fallback
     }
     return INITIAL_PROFILE_CONFIG;
+  });
+
+  // Travel Spots & Gourmet state with localStorage
+  const [travelSpots, setTravelSpots] = useState<TravelSpot[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.TRAVEL);
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // fallback
+    }
+    return INITIAL_TRAVEL_SPOTS;
+  });
+
+  // Music CD & Store Reviews state with localStorage
+  const [cdReviews, setCdReviews] = useState<CdReviewItem[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.CD_REVIEWS);
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // fallback
+    }
+    return INITIAL_CD_REVIEWS;
   });
 
   // User session state
@@ -107,6 +133,22 @@ export default function App() {
       console.warn('Storage sync error', e);
     }
   }, [profile]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.TRAVEL, JSON.stringify(travelSpots));
+    } catch (e) {
+      console.warn('Storage sync error', e);
+    }
+  }, [travelSpots]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.CD_REVIEWS, JSON.stringify(cdReviews));
+    } catch (e) {
+      console.warn('Storage sync error', e);
+    }
+  }, [cdReviews]);
 
   useEffect(() => {
     try {
@@ -165,6 +207,12 @@ export default function App() {
     };
 
     setMediaItems((prev) => [created, ...prev]);
+  };
+
+  const handleUpdateMediaItem = (id: string, updated: Partial<MediaItem>) => {
+    setMediaItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, ...updated } : item))
+    );
   };
 
   const handleDeleteItem = (id: string) => {
@@ -263,15 +311,77 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
+  // Travel & Gourmet Handlers
+  const handleAddTravelSpot = (newSpotData: Omit<TravelSpot, 'id' | 'dateAdded'>) => {
+    const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '.');
+    const newSpot: TravelSpot = {
+      ...newSpotData,
+      id: `travel-${Date.now()}`,
+      dateAdded: todayStr
+    };
+    setTravelSpots((prev) => [newSpot, ...prev]);
+  };
+
+  const handleUpdateTravelSpot = (id: string, updated: Partial<TravelSpot>) => {
+    setTravelSpots((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, ...updated } : item))
+    );
+  };
+
+  const handleDeleteTravelSpot = (id: string) => {
+    if (confirm('이 여행지/맛집 항목을 삭제하시겠습니까?')) {
+      setTravelSpots((prev) => prev.filter((item) => item.id !== id));
+    }
+  };
+
+  const handleTogglePinTravelSpot = (id: string) => {
+    setTravelSpots((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, pinned: !item.pinned } : item))
+    );
+  };
+
+  // Music CD & Store Reviews Handlers
+  const handleAddCdReview = (newCdData: Omit<CdReviewItem, 'id' | 'dateAdded'>) => {
+    const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '.');
+    const newCd: CdReviewItem = {
+      ...newCdData,
+      id: `cd-${Date.now()}`,
+      dateAdded: todayStr
+    };
+    setCdReviews((prev) => [newCd, ...prev]);
+  };
+
+  const handleUpdateCdReview = (id: string, updated: Partial<CdReviewItem>) => {
+    setCdReviews((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, ...updated } : item))
+    );
+  };
+
+  const handleDeleteCdReview = (id: string) => {
+    if (confirm('이 음반/판매처 항목을 삭제하시겠습니까?')) {
+      setCdReviews((prev) => prev.filter((item) => item.id !== id));
+    }
+  };
+
+  const handleTogglePinCdReview = (id: string) => {
+    setCdReviews((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, pinned: !item.pinned } : item))
+    );
+  };
+
   const handleResetData = () => {
     setMediaItems(INITIAL_MEDIA_ITEMS);
     setGuestbookEntries(INITIAL_GUESTBOOK_ENTRIES);
     setProfile(INITIAL_PROFILE_CONFIG);
+    setTravelSpots(INITIAL_TRAVEL_SPOTS);
+    setCdReviews(INITIAL_CD_REVIEWS);
   };
 
   const mediaCount = {
     youtube: mediaItems.filter((i) => i.type === 'youtube').length,
-    facebook: mediaItems.filter((i) => i.type === 'facebook').length
+    facebook: mediaItems.filter((i) => i.type === 'facebook').length,
+    travel: travelSpots.length,
+    cd: cdReviews.length
   };
 
   return (
@@ -294,6 +404,7 @@ export default function App() {
               onQuickFileUpload={handleQuickFileUpload}
               mediaCount={mediaCount}
               profile={profile}
+              onSelectTab={setActiveTab}
             />
           </div>
 
@@ -315,6 +426,8 @@ export default function App() {
                     {activeTab === 'gallery' && '스튜디오 갤러리 (사진 & 영상 모아보기)'}
                     {activeTab === 'upload_facebook' && '페이스북 사진 업로드 및 링크 관리'}
                     {activeTab === 'upload_youtube' && '유튜브 영상 등록 및 연동 관리'}
+                    {activeTab === 'travel_food' && '국내 여행&맛집 (주요 여행지 & 미식 핫플 아카이브)'}
+                    {activeTab === 'cd_review' && '구매CD 검토 (소장 음반 & 온/오프라인 판매처 링크)'}
                     {activeTab === 'edit_profile' && '권용우의 아이콘 수정 (프로필 & 아바타 커스텀)'}
                     {activeTab === 'admin' && '관리자 센터 (dream2note3@gmail.com)'}
                   </h2>
@@ -332,6 +445,7 @@ export default function App() {
                   onToggleLike={handleToggleLike}
                   onDeleteItem={handleDeleteItem}
                   onTogglePin={handleTogglePin}
+                  onUpdateItem={handleUpdateMediaItem}
                   isAdmin={!!session?.isAdmin}
                 />
               )}
@@ -351,6 +465,28 @@ export default function App() {
                   session={session}
                   onOpenAdminLogin={() => setActiveTab('admin')}
                   onSuccessReturn={() => setActiveTab('gallery')}
+                />
+              )}
+
+              {activeTab === 'travel_food' && (
+                <TravelFoodGallery
+                  items={travelSpots}
+                  onAddItem={handleAddTravelSpot}
+                  onUpdateItem={handleUpdateTravelSpot}
+                  onDeleteItem={handleDeleteTravelSpot}
+                  onTogglePin={handleTogglePinTravelSpot}
+                  isAdmin={!!session?.isAdmin}
+                />
+              )}
+
+              {activeTab === 'cd_review' && (
+                <CdReviewGallery
+                  items={cdReviews}
+                  onAddItem={handleAddCdReview}
+                  onUpdateItem={handleUpdateCdReview}
+                  onDeleteItem={handleDeleteCdReview}
+                  onTogglePin={handleTogglePinCdReview}
+                  isAdmin={!!session?.isAdmin}
                 />
               )}
 

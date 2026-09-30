@@ -1,6 +1,6 @@
 import React from 'react';
 import { ActiveTab, UserSession } from '../types';
-import { LayoutGrid, Image, Video, ShieldCheck, UserCheck, Palette } from 'lucide-react';
+import { LayoutGrid, Image, Video, ShieldCheck, UserCheck, Palette, MapPin, Disc3 } from 'lucide-react';
 
 interface RightTabsProps {
   activeTab: ActiveTab;
@@ -31,6 +31,18 @@ export const RightTabs: React.FC<RightTabsProps> = ({
       label: '영상업로드\n(YouTube)',
       icon: <Video className="w-3.5 h-3.5 text-red-600" />,
       subtext: '유튜브 영상 링크'
+    },
+    {
+      id: 'travel_food' as ActiveTab,
+      label: '국내 여행&맛집',
+      icon: <MapPin className="w-3.5 h-3.5 text-emerald-600" />,
+      subtext: '명소·맛집 링크'
+    },
+    {
+      id: 'cd_review' as ActiveTab,
+      label: '구매CD 검토',
+      icon: <Disc3 className="w-3.5 h-3.5 text-[#3b82f6]" />,
+      subtext: '음반·판매처 링크'
     },
     {
       id: 'edit_profile' as ActiveTab,
