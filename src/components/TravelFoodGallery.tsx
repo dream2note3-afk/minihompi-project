@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { TravelSpot, TravelCategory, UserSession } from '../types';
-import { MapPin, Utensils, Coffee, Camera, ExternalLink, Plus, Search, Star, Pin, Trash2, Edit3, X, Check, Sparkles, Navigation } from 'lucide-react';
+import { MapPin, Utensils, Coffee, Camera, ExternalLink, Plus, Search, Star, Pin, Trash2, Edit3, X, Check, Sparkles, Navigation, ArrowUpDown, HardDrive, HelpCircle } from 'lucide-react';
+import { isGoogleDriveUrl, transformIfGoogleDriveUrl, handleGoogleDriveImageError } from '../utils/googleDrive';
+import { GoogleDrivePermissionTooltip } from './GoogleDrivePermissionTooltip';
 
 interface TravelFoodGalleryProps {
   items: TravelSpot[];
@@ -63,8 +65,10 @@ export const TravelFoodGallery: React.FC<TravelFoodGalleryProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<'all' | TravelCategory>('all');
   const [selectedRegion, setSelectedRegion] = useState('전체');
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<'latest' | 'popular'>('latest');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingSpotId, setEditingSpotId] = useState<string | null>(null);
+  const [showDriveHelpModal, setShowDriveHelpModal] = useState(false);
 
   // Form State
   const [name, setName] = useState('');
@@ -165,20 +169,34 @@ export const TravelFoodGallery: React.FC<TravelFoodGalleryProps> = ({
     setShowAddModal(false);
   };
 
-  const filteredItems = items.filter((spot) => {
-    if (selectedCategory !== 'all' && spot.category !== selectedCategory) return false;
-    if (selectedRegion !== '전체' && spot.region !== selectedRegion) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchName = spot.name.toLowerCase().includes(q);
-      const matchDesc = spot.description.toLowerCase().includes(q);
-      const matchMenu = spot.recommendedMenuOrTip.toLowerCase().includes(q);
-      const matchRegion = spot.region.toLowerCase().includes(q);
-      const matchTags = spot.tags.some((t) => t.toLowerCase().includes(q));
-      if (!matchName && !matchDesc && !matchMenu && !matchRegion && !matchTags) return false;
-    }
-    return true;
-  });
+  const filteredItems = [...items]
+    .filter((spot) => {
+      if (selectedCategory !== 'all' && spot.category !== selectedCategory) return false;
+      if (selectedRegion !== '전체' && spot.region !== selectedRegion) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchName = spot.name.toLowerCase().includes(q);
+        const matchDesc = spot.description.toLowerCase().includes(q);
+        const matchMenu = spot.recommendedMenuOrTip.toLowerCase().includes(q);
+        const matchRegion = spot.region.toLowerCase().includes(q);
+        const matchTags = spot.tags.some((t) => t.toLowerCase().includes(q));
+        if (!matchName && !matchDesc && !matchMenu && !matchRegion && !matchTags) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      // Pinned items stay at top
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+
+      if (sortBy === 'popular') {
+        const aScore = a.likes ?? (a.rating * 15);
+        const bScore = b.likes ?? (b.rating * 15);
+        const diff = bScore - aScore;
+        if (diff !== 0) return diff;
+      }
+      return (b.dateAdded || '').localeCompare(a.dateAdded || '');
+    });
 
   const getCategoryBadge = (cat: TravelCategory) => {
     switch (cat) {
@@ -194,9 +212,9 @@ export const TravelFoodGallery: React.FC<TravelFoodGalleryProps> = ({
   };
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex-1 min-h-0 flex flex-col gap-2.5 h-full overflow-hidden">
       {/* Top Banner & Control Bar */}
-      <div className="bg-[#f0f6fa] border border-[#c4d7e2] rounded-lg p-3 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+      <div className="bg-[#f0f6fa] border border-[#c4d7e2] rounded-lg p-3 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 shrink-0">
         <div>
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-[#10b981]" />
@@ -209,17 +227,19 @@ export const TravelFoodGallery: React.FC<TravelFoodGalleryProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={handleOpenCreate}
-          className="px-3 py-1.5 bg-[#2b7294] hover:bg-[#205b77] text-white rounded text-xs font-bold shadow-2xs flex items-center justify-center gap-1.5 transition-all shrink-0 cursor-pointer"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>여행지·맛집 등록하기</span>
-        </button>
+        {isAdmin && (
+          <button
+            onClick={handleOpenCreate}
+            className="px-3 py-1.5 bg-[#2b7294] hover:bg-[#205b77] text-white rounded text-xs font-bold shadow-2xs flex items-center justify-center gap-1.5 transition-all shrink-0 cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>여행지·맛집 등록하기</span>
+          </button>
+        )}
       </div>
 
       {/* Filter Tabs & Search Bar */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2 bg-[#f8fafc] p-2 rounded-lg border border-[#cde0e9]">
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2 bg-[#f8fafc] p-2 rounded-lg border border-[#cde0e9] shrink-0">
         {/* Category Buttons */}
         <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0">
           <button
@@ -278,13 +298,27 @@ export const TravelFoodGallery: React.FC<TravelFoodGalleryProps> = ({
           </button>
         </div>
 
-        {/* Region & Search */}
-        <div className="flex items-center gap-2">
+        {/* Sort, Region & Search */}
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap sm:flex-nowrap">
+          {/* Sort selector */}
+          <div className="flex items-center gap-1 bg-white px-2 py-1 rounded border border-[#bed2dc] shadow-2xs">
+            <ArrowUpDown className="w-3.5 h-3.5 text-[#ff6b2b] shrink-0" />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'latest' | 'popular')}
+              className="bg-transparent text-xs text-[#2a3f50] font-medium outline-hidden cursor-pointer"
+              title="여행지 정렬 방식 선택"
+            >
+              <option value="latest">최신순</option>
+              <option value="popular">인기순 (별점·좋아요순)</option>
+            </select>
+          </div>
+
           {/* Region selector */}
           <select
             value={selectedRegion}
             onChange={(e) => setSelectedRegion(e.target.value)}
-            className="px-2 py-1 bg-white border border-[#bed2dc] rounded text-xs text-[#2a3f50] font-medium outline-hidden"
+            className="px-2 py-1 bg-white border border-[#bed2dc] rounded text-xs text-[#2a3f50] font-medium outline-hidden cursor-pointer shadow-2xs"
           >
             {REGIONS.map((r) => (
               <option key={r} value={r}>
@@ -307,15 +341,16 @@ export const TravelFoodGallery: React.FC<TravelFoodGalleryProps> = ({
         </div>
       </div>
 
-      {/* Cards Grid */}
-      {filteredItems.length === 0 ? (
+      {/* Cards Grid (Dedicated Red-box scrollable container) */}
+      <div className="flex-1 min-h-0 overflow-y-auto custom-retro-scrollbar pr-1">
+        {filteredItems.length === 0 ? (
         <div className="py-12 text-center bg-[#fdfdfd] border border-dashed border-[#ccdbe2] rounded-lg">
           <p className="text-xs text-[#6e8594]">
             선택한 조건에 해당하는 여행지나 맛집 정보가 없습니다.
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3.5">
           {filteredItems.map((spot) => {
             const badge = getCategoryBadge(spot.category);
 
@@ -335,12 +370,12 @@ export const TravelFoodGallery: React.FC<TravelFoodGalleryProps> = ({
                 {/* Photo & Badges */}
                 <div className="relative aspect-video bg-[#1e293b] overflow-hidden">
                   <img
-                    src={spot.imageUrl}
+                    src={transformIfGoogleDriveUrl(spot.imageUrl)}
                     alt={spot.name}
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     onError={(e) => {
-                      (e.target as HTMLElement).style.display = 'none';
+                      handleGoogleDriveImageError(e.currentTarget, spot.imageUrl);
                     }}
                   />
 
@@ -366,19 +401,22 @@ export const TravelFoodGallery: React.FC<TravelFoodGalleryProps> = ({
                 {/* Card Content Body */}
                 <div className="p-3 flex-1 flex flex-col justify-between">
                   <div>
-                    <h4 className="text-xs font-bold text-[#1f374a] group-hover:text-[#2b7294] transition-colors line-clamp-1">
+                    <h4
+                      className="text-xs sm:text-sm font-bold text-[#1f374a] group-hover:text-[#2b7294] transition-colors line-clamp-2 leading-snug break-keep break-words"
+                      title={spot.name}
+                    >
                       {spot.name}
                     </h4>
 
                     {/* Recommended tip or signature menu */}
                     {spot.recommendedMenuOrTip && (
-                      <div className="mt-1.5 p-1.5 bg-[#f5f9fc] border border-[#d6e5ef] rounded text-[11px] text-[#204a6e] font-medium flex items-start gap-1">
+                      <div className="mt-1.5 p-1.5 bg-[#f5f9fc] border border-[#d6e5ef] rounded text-[11px] sm:text-xs text-[#204a6e] font-medium flex items-start gap-1">
                         <span className="text-[#e05619] font-bold shrink-0">추천:</span>
-                        <span className="line-clamp-1">{spot.recommendedMenuOrTip}</span>
+                        <span className="line-clamp-2 break-keep break-words">{spot.recommendedMenuOrTip}</span>
                       </div>
                     )}
 
-                    <p className="mt-2 text-[11px] text-[#556e80] line-clamp-2 leading-relaxed">
+                    <p className="mt-2 text-[11px] sm:text-xs text-[#556e80] line-clamp-2 leading-relaxed break-keep break-words">
                       {spot.description}
                     </p>
 
@@ -387,7 +425,7 @@ export const TravelFoodGallery: React.FC<TravelFoodGalleryProps> = ({
                       {spot.tags.map((t, idx) => (
                         <span
                           key={idx}
-                          className="text-[10px] text-[#42647c] bg-[#eef4f7] px-1.5 py-0.2 rounded border border-[#d6e3ea]"
+                          className="text-[10px] sm:text-[11px] text-[#42647c] bg-[#eef4f7] px-1.5 py-0.2 rounded border border-[#d6e3ea] break-keep"
                         >
                           #{t}
                         </span>
@@ -451,6 +489,7 @@ export const TravelFoodGallery: React.FC<TravelFoodGalleryProps> = ({
           })}
         </div>
       )}
+      </div>
 
       {/* Add New Spot Modal */}
       {showAddModal && (
@@ -599,14 +638,31 @@ export const TravelFoodGallery: React.FC<TravelFoodGalleryProps> = ({
               {/* Image URL & Rating */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-[#2a3f50] mb-1">
-                    대표 사진 이미지 주소 (Image URL)
+                  <label className="block text-xs font-bold text-[#2a3f50] mb-1 flex items-center justify-between flex-wrap gap-1">
+                    <span>대표 사진 이미지 주소 (구글 드라이브 / 웹 사진)</span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {imageUrl && isGoogleDriveUrl(imageUrl) && (
+                        <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-300 px-1.5 py-0.2 rounded font-bold flex items-center gap-0.5">
+                          <HardDrive className="w-2.5 h-2.5" />
+                          Google Drive 사진 감지됨
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setShowDriveHelpModal(true)}
+                        className="text-[10px] text-[#0f5132] bg-white hover:bg-[#e8f5e9] border border-[#a5d6a7] px-1.5 py-0.2 rounded font-bold transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                        title="구글 드라이브 공유 권한 공개 설정 방법 안내 가이드 보기"
+                      >
+                        <HelpCircle className="w-2.5 h-2.5 text-[#0f9d58]" />
+                        <span>공유 권한 가이드</span>
+                      </button>
+                    </div>
                   </label>
                   <input
                     type="url"
                     value={imageUrl}
                     onChange={(e) => setImageUrl(e.target.value)}
-                    placeholder="https://images.unsplash.com/... 또는 사진 링크"
+                    placeholder="https://drive.google.com/file/d/... 또는 사진 링크"
                     className="w-full p-2 bg-white border border-[#bed2dc] rounded text-xs text-[#2a3f50] focus:border-emerald-600 outline-hidden font-mono"
                   />
                 </div>
@@ -706,6 +762,12 @@ export const TravelFoodGallery: React.FC<TravelFoodGalleryProps> = ({
           </div>
         </div>
       )}
+
+      {/* Google Drive Permission Guide Tooltip Modal */}
+      <GoogleDrivePermissionTooltip
+        isOpen={showDriveHelpModal}
+        onClose={() => setShowDriveHelpModal(false)}
+      />
     </div>
   );
 };

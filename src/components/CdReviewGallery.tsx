@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { CdReviewItem, CdCategory, CdStatus, UserSession } from '../types';
-import { Disc3, ShoppingCart, ExternalLink, Plus, Search, Star, Pin, Trash2, Check, Sparkles, Store, Music, Award, Radio, Edit3 } from 'lucide-react';
+import { Disc3, ShoppingCart, ExternalLink, Plus, Search, Star, Pin, Trash2, Check, Sparkles, Store, Music, Award, Radio, Edit3, ArrowUpDown } from 'lucide-react';
 
 interface CdReviewGalleryProps {
   items: CdReviewItem[];
@@ -67,6 +67,7 @@ export const CdReviewGallery: React.FC<CdReviewGalleryProps> = ({
   const [selectedStatus, setSelectedStatus] = useState<'all' | CdStatus>('all');
   const [selectedCategory, setSelectedCategory] = useState<'all' | CdCategory>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<'latest' | 'popular'>('latest');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingCdId, setEditingCdId] = useState<string | null>(null);
 
@@ -156,7 +157,7 @@ export const CdReviewGallery: React.FC<CdReviewGalleryProps> = ({
       coverImageUrl: coverImageUrl.trim() || 'https://images.unsplash.com/photo-1539185441755-769473a23570?auto=format&fit=crop&w=800&q=80',
       releaseYear: releaseYear.trim(),
       reviewComment: reviewComment.trim(),
-      keyTracks: keyTracks.length > 0 ? keyTracks : undefined,
+      keyTracks: keyTracks.length > 0 ? keyTracks : [],
       rating,
       pinned: isPinned
     };
@@ -181,20 +182,34 @@ export const CdReviewGallery: React.FC<CdReviewGalleryProps> = ({
     setShowAddModal(false);
   };
 
-  const filteredItems = items.filter((item) => {
-    if (selectedStatus !== 'all' && item.status !== selectedStatus) return false;
-    if (selectedCategory !== 'all' && item.category !== selectedCategory) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchTitle = item.title.toLowerCase().includes(q);
-      const matchArtist = item.artistOrSeller.toLowerCase().includes(q);
-      const matchComment = item.reviewComment.toLowerCase().includes(q);
-      const matchStore = item.storeName.toLowerCase().includes(q);
-      const matchTracks = item.keyTracks?.some((t) => t.toLowerCase().includes(q));
-      if (!matchTitle && !matchArtist && !matchComment && !matchStore && !matchTracks) return false;
-    }
-    return true;
-  });
+  const filteredItems = [...items]
+    .filter((item) => {
+      if (selectedStatus !== 'all' && item.status !== selectedStatus) return false;
+      if (selectedCategory !== 'all' && item.category !== selectedCategory) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchTitle = item.title.toLowerCase().includes(q);
+        const matchArtist = item.artistOrSeller.toLowerCase().includes(q);
+        const matchComment = item.reviewComment.toLowerCase().includes(q);
+        const matchStore = item.storeName.toLowerCase().includes(q);
+        const matchTracks = item.keyTracks?.some((t) => t.toLowerCase().includes(q));
+        if (!matchTitle && !matchArtist && !matchComment && !matchStore && !matchTracks) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      // Pinned items stay at top
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+
+      if (sortBy === 'popular') {
+        const aScore = a.likes ?? ((a.rating || 5) * 15);
+        const bScore = b.likes ?? ((b.rating || 5) * 15);
+        const diff = bScore - aScore;
+        if (diff !== 0) return diff;
+      }
+      return (b.dateAdded || '').localeCompare(a.dateAdded || '');
+    });
 
   const getStatusBadge = (s: CdStatus) => {
     switch (s) {
@@ -223,9 +238,9 @@ export const CdReviewGallery: React.FC<CdReviewGalleryProps> = ({
   };
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex-1 min-h-0 flex flex-col gap-2.5 h-full overflow-hidden">
       {/* Top Banner & Control Bar */}
-      <div className="bg-[#f2f4fa] border border-[#cbd5e8] rounded-lg p-3 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+      <div className="bg-[#f2f4fa] border border-[#cbd5e8] rounded-lg p-3 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 shrink-0">
         <div>
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-[#3b82f6]" />
@@ -238,17 +253,19 @@ export const CdReviewGallery: React.FC<CdReviewGalleryProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={handleOpenCreate}
-          className="px-3 py-1.5 bg-[#3b82f6] hover:bg-[#2563eb] text-white rounded text-xs font-bold shadow-2xs flex items-center justify-center gap-1.5 transition-all shrink-0 cursor-pointer"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>음반·판매처 등록하기</span>
-        </button>
+        {isAdmin && (
+          <button
+            onClick={handleOpenCreate}
+            className="px-3 py-1.5 bg-[#3b82f6] hover:bg-[#2563eb] text-white rounded text-xs font-bold shadow-2xs flex items-center justify-center gap-1.5 transition-all shrink-0 cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>음반·판매처 등록하기</span>
+          </button>
+        )}
       </div>
 
       {/* Filter Tabs & Search Bar */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2 bg-[#f8fafc] p-2 rounded-lg border border-[#cde0e9]">
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2 bg-[#f8fafc] p-2 rounded-lg border border-[#cde0e9] shrink-0">
         {/* Status Filter Buttons */}
         <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0">
           <button
@@ -303,12 +320,26 @@ export const CdReviewGallery: React.FC<CdReviewGalleryProps> = ({
           </button>
         </div>
 
-        {/* Category & Search */}
-        <div className="flex items-center gap-2">
+        {/* Sort, Category & Search */}
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap sm:flex-nowrap">
+          {/* Sort Dropdown */}
+          <div className="flex items-center gap-1 bg-white px-2 py-1 rounded border border-[#bed2dc] shadow-2xs">
+            <ArrowUpDown className="w-3.5 h-3.5 text-[#ff6b2b] shrink-0" />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'latest' | 'popular')}
+              className="bg-transparent text-xs text-[#2a3f50] font-medium outline-hidden cursor-pointer"
+              title="음반 정렬 방식 선택"
+            >
+              <option value="latest">최신순</option>
+              <option value="popular">인기순 (별점·좋아요순)</option>
+            </select>
+          </div>
+
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value as any)}
-            className="px-2 py-1 bg-white border border-[#bed2dc] rounded text-xs text-[#2a3f50] font-medium outline-hidden"
+            className="px-2 py-1 bg-white border border-[#bed2dc] rounded text-xs text-[#2a3f50] font-medium outline-hidden cursor-pointer shadow-2xs"
           >
             <option value="all">전체 분류</option>
             <option value="album">정규 음반 CD</option>
@@ -330,15 +361,16 @@ export const CdReviewGallery: React.FC<CdReviewGalleryProps> = ({
         </div>
       </div>
 
-      {/* CD Items Grid */}
-      {filteredItems.length === 0 ? (
+      {/* CD Items Grid (Dedicated Red-box scrollable container) */}
+      <div className="flex-1 min-h-0 overflow-y-auto custom-retro-scrollbar pr-1">
+        {filteredItems.length === 0 ? (
         <div className="py-12 text-center bg-[#fdfdfd] border border-dashed border-[#ccdbe2] rounded-lg">
           <p className="text-xs text-[#6e8594]">
             선택한 조건에 해당하는 음반 검토 항목이 없습니다.
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3.5">
           {filteredItems.map((item) => {
             const statusBadge = getStatusBadge(item.status);
             const catBadge = getCategoryBadge(item.category);
@@ -403,12 +435,15 @@ export const CdReviewGallery: React.FC<CdReviewGalleryProps> = ({
                       {item.releaseYear && <span className="font-mono text-[10px]">{item.releaseYear}</span>}
                     </div>
 
-                    <h4 className="text-xs font-bold text-[#1f374a] group-hover:text-[#3b82f6] transition-colors line-clamp-1">
+                    <h4
+                      className="text-xs sm:text-sm font-bold text-[#1f374a] group-hover:text-[#3b82f6] transition-colors line-clamp-2 leading-snug break-keep break-words"
+                      title={item.title}
+                    >
                       {item.title}
                     </h4>
 
                     {/* Review comment */}
-                    <p className="mt-1.5 text-[11px] text-[#556e80] line-clamp-2 leading-relaxed">
+                    <p className="mt-1.5 text-[11px] sm:text-xs text-[#556e80] line-clamp-2 leading-relaxed break-keep break-words">
                       {item.reviewComment}
                     </p>
 
@@ -485,6 +520,7 @@ export const CdReviewGallery: React.FC<CdReviewGalleryProps> = ({
           })}
         </div>
       )}
+      </div>
 
       {/* Add New CD/Store Review Modal */}
       {showAddModal && (

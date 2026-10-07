@@ -1,0 +1,156 @@
+{
+  "entities": {
+    "MediaItem": {
+      "title": "MediaItem",
+      "description": "YouTube videos and Facebook photos published on the minihompy studio",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "type": { "type": "string", "enum": ["youtube", "facebook"] },
+        "url": { "type": "string" },
+        "thumbnailUrl": { "type": "string" },
+        "youtubeId": { "type": "string" },
+        "description": { "type": "string" },
+        "date": { "type": "string" },
+        "tags": { "type": "array" },
+        "likes": { "type": "number" },
+        "views": { "type": "number" },
+        "pinned": { "type": "boolean" },
+        "album": { "type": "string" }
+      },
+      "required": ["title", "type", "url"]
+    },
+    "TravelSpot": {
+      "title": "TravelSpot",
+      "description": "Domestic travel destinations and gourmet restaurants curated by Kwon Yong-woo",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "category": { "type": "string", "enum": ["travel", "food", "cafe", "photoslot"] },
+        "region": { "type": "string" },
+        "linkUrl": { "type": "string" },
+        "linkName": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "rating": { "type": "number" },
+        "recommendedMenuOrTip": { "type": "string" },
+        "description": { "type": "string" },
+        "tags": { "type": "array" },
+        "pinned": { "type": "boolean" },
+        "dateAdded": { "type": "string" }
+      },
+      "required": ["name", "linkUrl"]
+    },
+    "CdReviewItem": {
+      "title": "CdReviewItem",
+      "description": "Music CD collection and store links review item",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "artistOrSeller": { "type": "string" },
+        "category": { "type": "string", "enum": ["album", "online_store", "offline_store", "rare_cd"] },
+        "status": { "type": "string", "enum": ["reviewing", "planned", "purchased", "wishlist"] },
+        "price": { "type": "string" },
+        "storeUrl": { "type": "string" },
+        "storeName": { "type": "string" },
+        "coverImageUrl": { "type": "string" },
+        "releaseYear": { "type": "string" },
+        "reviewComment": { "type": "string" },
+        "keyTracks": { "type": "array" },
+        "rating": { "type": "number" },
+        "pinned": { "type": "boolean" },
+        "dateAdded": { "type": "string" }
+      },
+      "required": ["title", "storeUrl"]
+    },
+    "GuestbookEntry": {
+      "title": "GuestbookEntry",
+      "description": "Guestbook visitor message entry",
+      "type": "object",
+      "properties": {
+        "author": { "type": "string" },
+        "avatarMood": { "type": "string" },
+        "message": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "isPrivate": { "type": "boolean" }
+      },
+      "required": ["author", "message"]
+    },
+    "IlchonFriend": {
+      "title": "IlchonFriend",
+      "description": "Close friends (Ilchon) with real-time status messages and minihompy surf links",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "relation": { "type": "string" },
+        "avatarIcon": { "type": "string" },
+        "statusMessage": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "isOnline": { "type": "boolean" },
+        "minihompyTitle": { "type": "string" }
+      },
+      "required": ["name", "relation", "statusMessage"]
+    },
+    "IlchonNote": {
+      "title": "IlchonNote",
+      "description": "Real-time paper notes and direct messages between Ilchon friends",
+      "type": "object",
+      "properties": {
+        "friendId": { "type": "string" },
+        "sender": { "type": "string" },
+        "senderName": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "isMine": { "type": "boolean" },
+        "avatarIcon": { "type": "string" }
+      },
+      "required": ["friendId", "text", "sender"]
+    },
+    "ProfileConfig": {
+      "title": "ProfileConfig",
+      "description": "Kwon Yong-woo hompy profile and visual customizations",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "artistBadge": { "type": "string" },
+        "todayMood": { "type": "string" },
+        "introText": { "type": "string" },
+        "bgmTitle": { "type": "string" },
+        "bgmArtist": { "type": "string" },
+        "contactEmail": { "type": "string" },
+        "profileImage": { "type": "string" },
+        "visualStyle": { "type": "string" }
+      },
+      "required": ["title"]
+    }
+  },
+  "firestore": {
+    "/media_items/{mediaId}": {
+      "schema": "MediaItem",
+      "description": "Collection of photos and videos"
+    },
+    "/travel_spots/{spotId}": {
+      "schema": "TravelSpot",
+      "description": "Collection of domestic travel spots and restaurants"
+    },
+    "/cd_reviews/{cdId}": {
+      "schema": "CdReviewItem",
+      "description": "Collection of CD reviews and store links"
+    },
+    "/guestbook_entries/{entryId}": {
+      "schema": "GuestbookEntry",
+      "description": "Collection of guestbook entries"
+    },
+    "/profile_config/{docId}": {
+      "schema": "ProfileConfig",
+      "description": "Profile configuration document"
+    },
+    "/ilchon_friends/{friendId}": {
+      "schema": "IlchonFriend",
+      "description": "Collection of Ilchon friends with real-time status messages"
+    },
+    "/ilchon_notes/{noteId}": {
+      "schema": "IlchonNote",
+      "description": "Collection of Ilchon paper notes and direct messages"
+    }
+  }
+}

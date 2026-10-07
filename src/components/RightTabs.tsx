@@ -1,11 +1,11 @@
 import React from 'react';
 import { ActiveTab, UserSession } from '../types';
-import { LayoutGrid, Image, Video, ShieldCheck, UserCheck, Palette, MapPin, Disc3 } from 'lucide-react';
+import { LayoutGrid, Image, Video, MapPin, Disc3, Home, Music, MessageSquare } from 'lucide-react';
 
 interface RightTabsProps {
   activeTab: ActiveTab;
   onTabChange: (tab: ActiveTab) => void;
-  session: UserSession | null;
+  session?: UserSession | null;
 }
 
 export const RightTabs: React.FC<RightTabsProps> = ({
@@ -13,7 +13,9 @@ export const RightTabs: React.FC<RightTabsProps> = ({
   onTabChange,
   session
 }) => {
-  const tabs = [
+  const isAdmin = !!session?.isAdmin;
+
+  const baseTabs = [
     {
       id: 'gallery' as ActiveTab,
       label: '사진&영상 보기',
@@ -21,16 +23,22 @@ export const RightTabs: React.FC<RightTabsProps> = ({
       subtext: '전체 아카이브'
     },
     {
-      id: 'upload_facebook' as ActiveTab,
-      label: '사진업로드\n(FaceBook)',
-      icon: <Image className="w-3.5 h-3.5 text-blue-600" />,
-      subtext: '페이스북 사진 링크'
+      id: 'miniroom' as ActiveTab,
+      label: '스튜디오 미니룸',
+      icon: <Home className="w-3.5 h-3.5 text-[#ff6b2b]" />,
+      subtext: '가구배치·BGM'
     },
     {
-      id: 'upload_youtube' as ActiveTab,
-      label: '영상업로드\n(YouTube)',
-      icon: <Video className="w-3.5 h-3.5 text-red-600" />,
-      subtext: '유튜브 영상 링크'
+      id: 'guestbook' as ActiveTab,
+      label: '방명록 (글남기기)',
+      icon: <MessageSquare className="w-3.5 h-3.5 text-[#ea580c]" />,
+      subtext: '방문글·일촌평'
+    },
+    {
+      id: 'my_cd_collection' as ActiveTab,
+      label: '소장CD/음원',
+      icon: <Music className="w-3.5 h-3.5 text-[#7c3aed]" />,
+      subtext: '4만곡·2,500 앨범'
     },
     {
       id: 'travel_food' as ActiveTab,
@@ -43,23 +51,28 @@ export const RightTabs: React.FC<RightTabsProps> = ({
       label: '구매CD 검토',
       icon: <Disc3 className="w-3.5 h-3.5 text-[#3b82f6]" />,
       subtext: '음반·판매처 링크'
-    },
-    {
-      id: 'edit_profile' as ActiveTab,
-      label: '아이콘 수정\n(프로필 설정)',
-      icon: <Palette className="w-3.5 h-3.5 text-[#ff7e39]" />,
-      subtext: '권용우의 아이콘 편집'
-    },
-    {
-      id: 'admin' as ActiveTab,
-      label: session?.isAdmin ? '관리자 모드\n(인증됨)' : '관리자',
-      icon: session?.isAdmin ? <UserCheck className="w-3.5 h-3.5 text-emerald-600" /> : <ShieldCheck className="w-3.5 h-3.5 text-[#6c5ce7]" />,
-      subtext: 'dream2note3@gmail.com'
     }
   ];
 
+  const adminTabs = [
+    {
+      id: 'upload_facebook' as ActiveTab,
+      label: '사진업로드',
+      icon: <Image className="w-3.5 h-3.5 text-blue-600" />,
+      subtext: '구글드라이브·FB'
+    },
+    {
+      id: 'upload_youtube' as ActiveTab,
+      label: '영상업로드',
+      icon: <Video className="w-3.5 h-3.5 text-red-600" />,
+      subtext: 'YouTube·FB 지원'
+    }
+  ];
+
+  const tabs = isAdmin ? [...baseTabs, ...adminTabs] : baseTabs;
+
   return (
-    <nav className="w-full md:w-36 shrink-0 flex md:flex-col gap-1.5 p-2 bg-[#dfd6ed] border border-[#beb1d6] rounded-lg shadow-sm md:self-start">
+    <nav className="w-full md:w-36 shrink-0 flex md:flex-col overflow-x-auto no-scrollbar gap-1 sm:gap-1.5 p-1 sm:p-1.5 md:p-2 bg-[#dfd6ed] border border-[#beb1d6] rounded-lg shadow-xs sticky top-1 z-20 md:static md:self-start">
       {tabs.map((tab) => {
         const isActive = activeTab === tab.id;
 
@@ -67,20 +80,25 @@ export const RightTabs: React.FC<RightTabsProps> = ({
           <button
             key={tab.id}
             onClick={() => onTabChange(tab.id)}
-            className={`relative flex flex-col items-center md:items-start p-2.5 rounded-md transition-all duration-150 text-left border ${
+            className={`relative flex items-center md:items-start md:flex-col shrink-0 md:shrink px-2.5 py-1.5 md:p-2.5 rounded-md transition-all duration-150 text-left border cursor-pointer select-none ${
               isActive
-                ? 'bg-white text-[#2a2a2a] border-[#b4a4cb] shadow-sm translate-x-0 md:-translate-x-1 font-bold'
+                ? 'bg-white text-[#2a2a2a] border-[#b4a4cb] shadow-xs translate-x-0 md:-translate-x-1 font-bold'
                 : 'bg-[#ede6f7] text-[#554a6b] border-[#cfc2e3] hover:bg-[#f5f0fa] font-medium'
             }`}
           >
-            {/* Active indicator dot / tab spine */}
+            {/* Desktop Left Spine Indicator */}
             {isActive && (
               <div className="hidden md:block absolute -left-1 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-[#ff6b2b] rounded-r-xs" />
             )}
 
-            <div className="flex items-center gap-1.5 w-full">
+            {/* Mobile Bottom Highlight Line */}
+            {isActive && (
+              <div className="md:hidden absolute bottom-0 left-2 right-2 h-0.5 bg-[#ff6b2b] rounded-full" />
+            )}
+
+            <div className="flex items-center gap-1.5 whitespace-nowrap">
               <span className="shrink-0">{tab.icon}</span>
-              <span className="text-xs whitespace-pre-line leading-tight">
+              <span className="text-xs leading-tight">
                 {tab.label}
               </span>
             </div>

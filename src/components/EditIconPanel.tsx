@@ -2,7 +2,10 @@ import React, { useState, useRef } from 'react';
 import { ProfileConfig, UserSession } from '../types';
 import { ProfileAvatarVisual } from './ProfileAvatarVisual';
 import { INITIAL_PROFILE_CONFIG } from '../data/initialData';
-import { Sparkles, Check, RotateCcw, Camera, Palette, Tag, MessageSquare, AlertCircle, ArrowLeft, Upload, FileImage, Trash2, FolderUp } from 'lucide-react';
+import { RETRO_THEME_PALETTES, getThemePalette } from '../utils/themePalettes';
+import { Sparkles, Check, RotateCcw, Camera, Palette, Tag, MessageSquare, AlertCircle, ArrowLeft, Upload, FileImage, Trash2, FolderUp, HardDrive, HelpCircle } from 'lucide-react';
+import { isGoogleDriveUrl } from '../utils/googleDrive';
+import { GoogleDrivePermissionTooltip } from './GoogleDrivePermissionTooltip';
 
 interface EditIconPanelProps {
   currentConfig: ProfileConfig;
@@ -52,9 +55,32 @@ export const EditIconPanel: React.FC<EditIconPanelProps> = ({
   onOpenAdminLogin,
   onReturnToGallery
 }) => {
-  const [formData, setFormData] = useState<ProfileConfig>({ ...currentConfig });
+  const [formData, setFormData] = useState<ProfileConfig>(() => ({
+    iconTitle: currentConfig?.iconTitle || INITIAL_PROFILE_CONFIG.iconTitle,
+    avatarType: currentConfig?.avatarType || INITIAL_PROFILE_CONFIG.avatarType,
+    customImageUrl: currentConfig?.customImageUrl || '',
+    uploadedFileDataUrl: currentConfig?.uploadedFileDataUrl,
+    uploadedFileName: currentConfig?.uploadedFileName,
+    statusDotColor: currentConfig?.statusDotColor || INITIAL_PROFILE_CONFIG.statusDotColor,
+    statusDotTitle: currentConfig?.statusDotTitle || INITIAL_PROFILE_CONFIG.statusDotTitle,
+    welcomeMessage: currentConfig?.welcomeMessage || INITIAL_PROFILE_CONFIG.welcomeMessage,
+    subMessage: currentConfig?.subMessage || INITIAL_PROFILE_CONFIG.subMessage,
+    roleBadgeText: currentConfig?.roleBadgeText || INITIAL_PROFILE_CONFIG.roleBadgeText,
+    themePalette: currentConfig?.themePalette || INITIAL_PROFILE_CONFIG.themePalette
+  }));
+
+  React.useEffect(() => {
+    if (currentConfig && currentConfig.iconTitle && currentConfig.welcomeMessage) {
+      setFormData((prev) => ({
+        ...prev,
+        ...currentConfig
+      }));
+    }
+  }, [currentConfig]);
+
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [showDriveHelpModal, setShowDriveHelpModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processAndSetImageFile = (file: File) => {
@@ -182,7 +208,7 @@ export const EditIconPanel: React.FC<EditIconPanelProps> = ({
   };
 
   return (
-    <div className="bg-white border border-[#bed2dc] rounded-lg p-4 shadow-xs">
+    <div className="bg-white border border-[#bed2dc] rounded-lg p-4 shadow-xs flex-1 min-h-0 overflow-y-auto custom-retro-scrollbar">
       {/* Header */}
       <div className="flex items-center justify-between pb-3 border-b border-[#e2edf2] mb-4">
         <div className="flex items-center gap-2">
@@ -403,22 +429,42 @@ export const EditIconPanel: React.FC<EditIconPanelProps> = ({
                     onChange={() => handlePresetSelect('custom_url')}
                     className="accent-[#ff7e39]"
                   />
-                  <span className="text-xs font-bold text-[#2a3f50]">
-                    웹 이미지 URL 직접 입력 (페이스북/웹 사진 주소)
+                  <span className="text-xs font-bold text-[#2a3f50] flex items-center gap-1.5 flex-wrap">
+                    <span>구글 드라이브(Google Drive) / 웹 사진 URL 직접 입력</span>
+                    <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-300 px-1.5 py-0.2 rounded font-medium flex items-center gap-0.5">
+                      <HardDrive className="w-2.5 h-2.5" />
+                      Google Drive 지원
+                    </span>
                   </span>
                 </label>
 
                 {formData.avatarType === 'custom_url' && (
-                  <div className="mt-1 pl-5">
+                  <div className="mt-1 pl-5 flex flex-col gap-1">
                     <input
                       type="url"
                       value={formData.customImageUrl || ''}
                       onChange={(e) => setFormData({ ...formData, customImageUrl: e.target.value })}
-                      placeholder="https://... (페이스북 또는 프로필 사진 링크)"
+                      placeholder="https://drive.google.com/file/d/... 또는 페이스북/웹 사진 링크"
                       className="w-full p-2 bg-white border border-[#bed2dc] rounded text-xs text-[#2a3f50] focus:border-[#ff7e39] outline-hidden font-mono"
                     />
-                    <p className="text-[10px] text-[#718898] mt-1">
-                      * 본인의 페이스북 프로필 사진 또는 고화질 웹 이미지 링크를 입력하면 실시간으로 교체됩니다.
+                    {formData.customImageUrl && isGoogleDriveUrl(formData.customImageUrl) && (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-300 px-2 py-0.5 rounded font-bold inline-flex items-center gap-1">
+                          <HardDrive className="w-3 h-3 text-emerald-600" />
+                          구글 드라이브 사진 링크 감지됨
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowDriveHelpModal(true)}
+                          className="text-[10px] text-[#0f5132] bg-white hover:bg-[#e8f5e9] border border-[#a5d6a7] px-1.5 py-0.5 rounded font-bold transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                        >
+                          <HelpCircle className="w-2.5 h-2.5 text-[#0f9d58]" />
+                          <span>공개 권한 설정 가이드</span>
+                        </button>
+                      </div>
+                    )}
+                    <p className="text-[10px] text-[#718898]">
+                      * Google Drive 사진 공유 링크, 페이스북 프로필 사진, 고화질 웹 이미지 링크 모두 실시간으로 교체됩니다.
                     </p>
                   </div>
                 )}
@@ -519,13 +565,13 @@ export const EditIconPanel: React.FC<EditIconPanelProps> = ({
               {/* Main Welcome Message */}
               <div className="mb-2">
                 <label className="block text-[11px] text-[#556e80] mb-0.5">
-                  메인 환영 인사말 (기본: “권용우의 스튜디오 방문을 환영합니다!“)
+                  메인 환영 인사말 (기본: “권용우의 행복한 인생 방문을 환영합니다!“)
                 </label>
                 <input
                   type="text"
                   value={formData.welcomeMessage}
                   onChange={(e) => setFormData({ ...formData, welcomeMessage: e.target.value })}
-                  placeholder="“권용우의 스튜디오 방문을 환영합니다!“"
+                  placeholder="“권용우의 행복한 인생 방문을 환영합니다!“"
                   className="w-full p-1.5 bg-white border border-[#bed2dc] rounded text-xs text-[#2a3f50] focus:border-[#ff7e39] outline-hidden font-medium"
                 />
               </div>
@@ -544,6 +590,71 @@ export const EditIconPanel: React.FC<EditIconPanelProps> = ({
               </div>
             </div>
 
+            {/* 5. Minihompy Overall Theme Palette Selection (User prompt requirement) */}
+            <div className="bg-[#f8fafb] border border-[#d6e3ea] rounded-md p-3">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-bold text-[#1f3a52] flex items-center gap-1.5">
+                  <Palette className="w-3.5 h-3.5 text-[#ff7e39]" />
+                  <span>미니홈피 테마 색상 (cyworld-outer-box 배경 및 테두리 팔레트)</span>
+                </label>
+                <span className="text-[10px] text-[#718898] font-mono">레트로 감성 스킨 4종</span>
+              </div>
+              <p className="text-[11px] text-[#637d8f] mb-3 leading-relaxed">
+                미니홈피 전체를 감싸는 외곽 상자(cyworld-outer-box)의 배경 색상과 테두리 컬러를 원하는 레트로 감성으로 설정합니다.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {RETRO_THEME_PALETTES.map((pal) => {
+                  const isSelected = (formData.themePalette || 'classic_sky') === pal.id;
+                  return (
+                    <button
+                      type="button"
+                      key={pal.id}
+                      onClick={() => setFormData({ ...formData, themePalette: pal.id })}
+                      className={`p-2.5 rounded-lg border text-left flex items-start gap-2.5 transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-white border-[#ff6b2b] shadow-xs ring-2 ring-[#ff6b2b]/30'
+                          : 'bg-white border-[#d2e0e8] hover:border-[#adc3d0] hover:bg-[#fafcfe]'
+                      }`}
+                    >
+                      {/* Mini Outer Box Visual Swatch */}
+                      <div
+                        className="w-12 h-12 rounded-lg border-2 shadow-xs shrink-0 p-1 flex items-center justify-center transition-transform"
+                        style={{ backgroundColor: pal.bgHex, borderColor: pal.borderHex }}
+                      >
+                        {/* Inner Box Simulation */}
+                        <div className="w-full h-full bg-white rounded border border-dashed border-[#8ba6b4]/50 flex items-center justify-center">
+                          <span className="text-[9px] font-mono text-[#6c8698] font-bold">CY</span>
+                        </div>
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-[#1a2f3f] truncate">
+                            {pal.name}
+                          </span>
+                          {isSelected && <Check className="w-3.5 h-3.5 text-[#ff6b2b] stroke-[3] shrink-0" />}
+                        </div>
+                        <p className="text-[10px] text-[#6d8494] line-clamp-1 mt-0.5">
+                          {pal.desc}
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-1.5 text-[9px] font-mono text-[#7e95a4]">
+                          <span className="flex items-center gap-0.5">
+                            <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: pal.bgHex }} />
+                            배경: {pal.bgHex}
+                          </span>
+                          <span className="flex items-center gap-0.5">
+                            <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: pal.borderHex }} />
+                            테두리: {pal.borderHex}
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
           </div>
 
           {/* Real-Time Live Preview Column (1 span) */}
@@ -551,55 +662,70 @@ export const EditIconPanel: React.FC<EditIconPanelProps> = ({
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-[#1f3a52] flex items-center gap-1">
                 <Sparkles className="w-3.5 h-3.5 text-[#ff7e39]" />
-                실시간 사이드바 미리보기
+                실시간 테마 &amp; 사이드바 미리보기
               </span>
               <span className="text-[10px] text-[#718898]">Live Preview</span>
             </div>
 
-            {/* Sidebar Preview Box */}
-            <div className="bg-white border-2 border-dashed border-[#b8ced8] rounded-lg p-3 flex flex-col items-center shadow-xs">
-              {/* Profile Image with frame */}
-              <div className="relative w-full aspect-square max-w-[160px] rounded-md overflow-hidden border border-[#9dbbca] shadow-inner bg-[#eaf1f5]">
-                <ProfileAvatarVisual config={formData} />
+            {/* Outer Box Theme Simulation Frame */}
+            {(() => {
+              const previewTheme = getThemePalette(formData.themePalette);
+              return (
+                <div
+                  className="rounded-xl p-2.5 border transition-all duration-300 shadow-md"
+                  style={{ backgroundColor: previewTheme.bgHex, borderColor: previewTheme.borderHex }}
+                >
+                  <div className="text-[10px] text-center font-bold text-[#1f3a52] mb-1.5 flex items-center justify-center gap-1">
+                    <span>테마: {previewTheme.name}</span>
+                  </div>
 
-                {/* Badge over photo */}
-                <div className="absolute bottom-1 right-1 bg-black/60 backdrop-blur-xs text-white text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1 font-mono">
-                  <Camera className="w-2.5 h-2.5 text-[#ff9f43]" />
-                  <span>{formData.roleBadgeText || 'DIRECTOR'}</span>
+                  {/* Sidebar Preview Box */}
+                  <div className="bg-white border-2 border-dashed border-[#b8ced8] rounded-lg p-3 flex flex-col items-center shadow-xs">
+                    {/* Profile Image with frame */}
+                    <div className="relative w-full aspect-square max-w-[160px] rounded-md overflow-hidden border border-[#9dbbca] shadow-inner bg-[#eaf1f5]">
+                      <ProfileAvatarVisual config={formData} />
+
+                      {/* Badge over photo */}
+                      <div className="absolute bottom-1 right-1 bg-black/60 backdrop-blur-xs text-white text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1 font-mono">
+                        <Camera className="w-2.5 h-2.5 text-[#ff9f43]" />
+                        <span>{formData.roleBadgeText || 'DIRECTOR'}</span>
+                      </div>
+                    </div>
+
+                    {/* Name: '권용우의 아이콘' + small red button mark */}
+                    <div className="mt-2.5 flex items-center justify-center gap-1.5 text-center">
+                      <span className="text-xs font-bold text-[#1a2f3f] tracking-tight">
+                        {formData.iconTitle || '권용우의 아이콘'}
+                      </span>
+                      <span
+                        className="w-2.5 h-2.5 rounded-full shadow-xs inline-block animate-pulse"
+                        style={{ backgroundColor: formData.statusDotColor }}
+                        title={formData.statusDotTitle}
+                      />
+                    </div>
+
+                    {/* Status title note */}
+                    <span className="text-[9px] text-[#7891a0] font-mono mt-0.5">
+                      상태: {formData.statusDotTitle}
+                    </span>
+
+                    {/* Korean introduction */}
+                    <div className="mt-2 w-full p-2 bg-[#f8fafb] border border-[#d9e5ec] rounded text-center">
+                      <p className="text-xs leading-relaxed text-[#2c3e50] font-medium break-keep">
+                        {formData.welcomeMessage}
+                      </p>
+                      <p className="mt-1 text-[10px] text-[#6d8494] break-keep">
+                        {formData.subMessage}
+                      </p>
+                    </div>
+
+                    <div className="mt-2.5 p-1.5 bg-[#f0f6fa] rounded text-[10px] text-[#557183] text-center w-full">
+                      저장 시 미니홈피 전체 외곽 상자 색상과 프로필이 즉시 바뀝니다.
+                    </div>
+                  </div>
                 </div>
-              </div>
-
-              {/* Name: '권용우의 아이콘' + small red button mark */}
-              <div className="mt-2.5 flex items-center justify-center gap-1.5 text-center">
-                <span className="text-xs font-bold text-[#1a2f3f] tracking-tight">
-                  {formData.iconTitle || '권용우의 아이콘'}
-                </span>
-                <span
-                  className="w-2.5 h-2.5 rounded-full shadow-xs inline-block animate-pulse"
-                  style={{ backgroundColor: formData.statusDotColor }}
-                  title={formData.statusDotTitle}
-                />
-              </div>
-
-              {/* Status title note */}
-              <span className="text-[9px] text-[#7891a0] font-mono mt-0.5">
-                상태: {formData.statusDotTitle}
-              </span>
-
-              {/* Korean introduction */}
-              <div className="mt-2 w-full p-2 bg-[#f8fafb] border border-[#d9e5ec] rounded text-center">
-                <p className="text-xs leading-relaxed text-[#2c3e50] font-medium break-keep">
-                  {formData.welcomeMessage}
-                </p>
-                <p className="mt-1 text-[10px] text-[#6d8494] break-keep">
-                  {formData.subMessage}
-                </p>
-              </div>
-
-              <div className="mt-3 p-2 bg-[#f0f6fa] rounded text-[10px] text-[#557183] text-center w-full">
-                이 모습 그대로 좌측 사이드바에 실시간 반영됩니다.
-              </div>
-            </div>
+              );
+            })()}
           </div>
 
         </div>
@@ -633,6 +759,12 @@ export const EditIconPanel: React.FC<EditIconPanelProps> = ({
           </div>
         </div>
       </form>
+
+      {/* Google Drive Permission Guide Tooltip Modal */}
+      <GoogleDrivePermissionTooltip
+        isOpen={showDriveHelpModal}
+        onClose={() => setShowDriveHelpModal(false)}
+      />
     </div>
   );
 };

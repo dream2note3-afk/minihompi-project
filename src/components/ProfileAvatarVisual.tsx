@@ -1,6 +1,7 @@
 import React from 'react';
 import { ProfileConfig } from '../types';
 import { Camera, Film, Sparkles, Image as ImageIcon } from 'lucide-react';
+import { transformIfGoogleDriveUrl, handleGoogleDriveImageError } from '../utils/googleDrive';
 
 interface ProfileAvatarVisualProps {
   config: ProfileConfig;
@@ -8,12 +9,18 @@ interface ProfileAvatarVisualProps {
 }
 
 export const ProfileAvatarVisual: React.FC<ProfileAvatarVisualProps> = ({ config, className = 'w-full h-full' }) => {
-  if (config.avatarType === 'uploaded_file' && config.uploadedFileDataUrl) {
+  // If user uploaded an icon file (or avatarType is uploaded_file), display the uploaded photo
+  if (
+    config.uploadedFileDataUrl &&
+    (config.avatarType === 'uploaded_file' ||
+      !config.avatarType ||
+      config.avatarType === 'preset_director')
+  ) {
     return (
       <div className={`relative w-full h-full bg-[#1e293b] flex items-center justify-center overflow-hidden ${className}`}>
         <img
           src={config.uploadedFileDataUrl}
-          alt={config.iconTitle}
+          alt={config.iconTitle || '권용우의 아이콘'}
           className="w-full h-full object-cover"
         />
       </div>
@@ -21,15 +28,16 @@ export const ProfileAvatarVisual: React.FC<ProfileAvatarVisualProps> = ({ config
   }
 
   if (config.avatarType === 'custom_url' && config.customImageUrl) {
+    const photoSrc = transformIfGoogleDriveUrl(config.customImageUrl);
     return (
       <div className={`relative w-full h-full bg-[#1e293b] flex items-center justify-center overflow-hidden ${className}`}>
         <img
-          src={config.customImageUrl}
+          src={photoSrc}
           alt={config.iconTitle}
           referrerPolicy="no-referrer"
           className="w-full h-full object-cover"
           onError={(e) => {
-            (e.target as HTMLElement).style.display = 'none';
+            handleGoogleDriveImageError(e.currentTarget, config.customImageUrl || '');
           }}
         />
         {/* Fallback visual if custom image fails */}
