@@ -23,6 +23,7 @@ import { BgmManagerPanel } from './components/BgmManagerPanel';
 import { Miniroom } from './components/Miniroom';
 import { IlchonChatModal } from './components/IlchonChatModal';
 import { bgmEngine } from './utils/audioSynth';
+import { Volume2, VolumeX } from 'lucide-react';
 import {
   connectRealtimeSync,
   broadcastServerUpdate,
@@ -584,6 +585,61 @@ export default function App() {
       unsubBgm();
     };
   }, []);
+
+  // Global Keyboard Left / Right arrow volume control when not in my_cd_collection tab
+  const [globalVolumeToast, setGlobalVolumeToast] = useState<{ volume: number; visible: boolean }>({
+    volume: 0.8,
+    visible: false
+  });
+  const globalVolumeToastTimer = React.useRef<number | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Do not intercept if user is typing in form inputs or textareas
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      // If user is currently in my_cd_collection tab, it handles its own playback and volume
+      if (activeTab === 'my_cd_collection') {
+        return;
+      }
+
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const cur = bgmEngine.getVolume();
+        const nextVol = Math.max(0, Math.round((cur - 0.05) * 100) / 100);
+        bgmEngine.setVolume(nextVol);
+        setGlobalVolumeToast({ volume: nextVol, visible: true });
+        if (globalVolumeToastTimer.current) window.clearTimeout(globalVolumeToastTimer.current);
+        globalVolumeToastTimer.current = window.setTimeout(() => {
+          setGlobalVolumeToast((prev) => ({ ...prev, visible: false }));
+        }, 1200);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        const cur = bgmEngine.getVolume();
+        const nextVol = Math.min(1, Math.round((cur + 0.05) * 100) / 100);
+        bgmEngine.setVolume(nextVol);
+        setGlobalVolumeToast({ volume: nextVol, visible: true });
+        if (globalVolumeToastTimer.current) window.clearTimeout(globalVolumeToastTimer.current);
+        globalVolumeToastTimer.current = window.setTimeout(() => {
+          setGlobalVolumeToast((prev) => ({ ...prev, visible: false }));
+        }, 1200);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      if (globalVolumeToastTimer.current) window.clearTimeout(globalVolumeToastTimer.current);
+    };
+  }, [activeTab]);
 
   // Sync to localStorage as offline fallback
   useEffect(() => {
@@ -1227,28 +1283,29 @@ export default function App() {
 
           {/* 4. Central Main Panel Column: Under sidebar on mobile (order-3), Center Column on desktop (md:order-3) */}
           <main className="order-3 md:order-3 cyworld-inner-box p-2.5 sm:p-3 md:p-3.5 bg-white min-w-0 flex flex-col md:h-full md:max-h-full md:overflow-hidden">
-            {/* Main Panel Content Title bar */}
-            <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-[#bcd0dc] shrink-0">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 bg-[#ff6b2b] rounded-xs" />
-                <h2 className="text-sm font-bold text-[#1f374a] tracking-tight">
-                  {activeTab === 'gallery' && '스튜디오 갤러리 (사진 & 영상 모아보기)'}
-                  {activeTab === 'upload_facebook' && '사진 업로드 (Google Drive · Facebook · YouTube 모든 링크 지원)'}
-                  {activeTab === 'upload_youtube' && '영상 업로드 (YouTube · Facebook 모든 링크 지원)'}
-                  {activeTab === 'travel_food' && '국내 여행&맛집 (주요 여행지 & 미식 핫플 아카이브)'}
-                  {activeTab === 'cd_review' && '구매CD 검토 (소장 음반 & 온/오프라인 판매처 링크)'}
-                  {activeTab === 'my_cd_collection' && '현재 소장하고 있는 약 4만곡의 음원(약 2,500 앨범)중, 앨범별 주요곡  설명 및 재생/감상'}
-                  {activeTab === 'guestbook' && '방명록 & 일촌 맺기 (누구나 자유롭게 발자국 남기고 일촌 신청)'}
-                  {activeTab === 'bgm_manage' && '음악 재생 & 반복 설정 메뉴 (1곡반복·선택반복·업로드)'}
-                  {activeTab === 'edit_profile' && '권용우의 아이콘 수정 (프로필 & 아바타 커스텀)'}
-                  {activeTab === 'admin' && '관리자 센터 (dream2note3@gmail.com)'}
-                </h2>
-              </div>
+            {/* Main Panel Content Title bar (소장 CD 탭에서는 아래 박스와 내용이 중복되므로 사진라인 제거하고 박스가 최상단에 바로 오도록 설정) */}
+            {activeTab !== 'my_cd_collection' && (
+              <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-[#bcd0dc] shrink-0">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 bg-[#ff6b2b] rounded-xs" />
+                  <h2 className="text-sm font-bold text-[#1f374a] tracking-tight">
+                    {activeTab === 'gallery' && '스튜디오 갤러리 (사진 & 영상 모아보기)'}
+                    {activeTab === 'upload_facebook' && '사진 업로드 (Google Drive · Facebook · YouTube 모든 링크 지원)'}
+                    {activeTab === 'upload_youtube' && '영상 업로드 (YouTube · Facebook 모든 링크 지원)'}
+                    {activeTab === 'travel_food' && '국내 여행&맛집 (주요 여행지 & 미식 핫플 아카이브)'}
+                    {activeTab === 'cd_review' && '구매CD 검토 (소장 음반 & 온/오프라인 판매처 링크)'}
+                    {activeTab === 'guestbook' && '방명록 & 일촌 맺기 (누구나 자유롭게 발자국 남기고 일촌 신청)'}
+                    {activeTab === 'bgm_manage' && '음악 재생 & 반복 설정 메뉴 (1곡반복·선택반복·업로드)'}
+                    {activeTab === 'edit_profile' && '권용우의 아이콘 수정 (프로필 & 아바타 커스텀)'}
+                    {activeTab === 'admin' && '관리자 센터 (dream2note3@gmail.com)'}
+                  </h2>
+                </div>
 
-              <div className="text-[11px] text-[#6d8494] font-medium hidden sm:block">
-                권용우의 공식 미니홈피 스튜디오
+                <div className="text-[11px] text-[#6d8494] font-medium hidden sm:block">
+                  권용우의 공식 미니홈피 스튜디오
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Dynamic View by Tab Container */}
             <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -1398,6 +1455,27 @@ export default function App() {
         </footer>
 
       </div>
+
+      {/* Floating Global Volume HUD (타 탭에서 키보드 좌/우 방향키로 배경음악 볼륨 조절 시 피드백 표시) */}
+      {globalVolumeToast.visible && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[#1e1b4b]/95 backdrop-blur-md text-white px-4 py-2 rounded-full shadow-2xl flex items-center gap-2.5 text-xs font-mono font-bold border border-purple-400/50 animate-fadeIn pointer-events-none select-none">
+          {globalVolumeToast.volume === 0 ? (
+            <VolumeX className="w-4 h-4 text-red-400 shrink-0" />
+          ) : (
+            <Volume2 className="w-4 h-4 text-[#ff6b2b] shrink-0" />
+          )}
+          <span className="whitespace-nowrap">BGM 볼륨 {Math.round(globalVolumeToast.volume * 100)}%</span>
+          <div className="w-24 h-1.5 bg-purple-950 rounded-full overflow-hidden border border-purple-500/30">
+            <div
+              className="h-full bg-linear-to-r from-[#ff6b2b] to-[#ea580c] transition-all duration-75"
+              style={{ width: `${Math.round(globalVolumeToast.volume * 100)}%` }}
+            />
+          </div>
+          <span className="text-[10px] text-purple-300 font-normal">
+            (좌/우 방향키)
+          </span>
+        </div>
+      )}
 
       {/* Floating Retro Cyworld Ilchon Paper Note Chat Modal Window */}
       {activeChatFriend && (

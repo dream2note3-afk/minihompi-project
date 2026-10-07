@@ -349,28 +349,11 @@ export const AdminLoginModal: React.FC<AdminLoginProps> = ({
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
+              <div className="mb-1">
                 <label className="text-xs font-bold text-[#374f61] flex items-center gap-1" htmlFor="admin-password-input">
                   <Key className="w-3.5 h-3.5 text-[#ff6b2b]" />
                   <span>비밀번호 (Password)</span>
                 </label>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] text-[#718898] hidden sm:inline">
-                    초기 비밀번호: <strong className="text-[#ff6b2b] font-mono">kwon2026!</strong>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPasswordInput('kwon2026!');
-                      setErrorMsg('');
-                    }}
-                    className="px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-[#b45309] border border-[#fcd34d] rounded text-[11px] font-bold flex items-center gap-1 active:scale-95 transition-all cursor-pointer shadow-2xs"
-                    title="초기 마스터 비밀번호 kwon2026! 자동 입력"
-                  >
-                    <Key className="w-3 h-3 text-[#d97706]" />
-                    <span>kwon2026! 원클릭 자동 입력</span>
-                  </button>
-                </div>
               </div>
               <div className="relative">
                 <input

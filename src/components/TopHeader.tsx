@@ -12,9 +12,7 @@ import {
   ListChecks,
   Disc3,
   Palette,
-  Shuffle,
-  Volume2,
-  VolumeX
+  Shuffle
 } from 'lucide-react';
 import { BgmManagerModal } from './BgmManagerModal';
 import { RetroLogoBadge } from './RetroLogoBadge';
@@ -47,8 +45,6 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   const [showBgmManager, setShowBgmManager] = useState(false);
   const [playMode, setPlayMode] = useState<BgmPlayMode>(bgmEngine.getPlayMode());
   const [selectedTrackCount, setSelectedTrackCount] = useState(bgmEngine.getSelectedTrackCount());
-  const [volume, setVolume] = useState<number>(() => bgmEngine.getVolume());
-  const [prevVolume, setPrevVolume] = useState<number>(0.5);
 
   useEffect(() => {
     const unsubscribe = bgmEngine.subscribe(() => {
@@ -58,7 +54,6 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
       setPlaylist(bgmEngine.getPlaylist());
       setPlayMode(bgmEngine.getPlayMode());
       setSelectedTrackCount(bgmEngine.getSelectedTrackCount());
-      setVolume(bgmEngine.getVolume());
     });
     return unsubscribe;
   }, []);
@@ -77,27 +72,6 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
 
   const handleTogglePlayMode = () => {
     bgmEngine.cyclePlayMode();
-  };
-
-  const handleVolumeChange = (newVol: number) => {
-    const clamped = Math.max(0, Math.min(1, newVol));
-    setVolume(clamped);
-    bgmEngine.setVolume(clamped);
-    if (clamped > 0) {
-      setPrevVolume(clamped);
-    }
-  };
-
-  const handleToggleMute = () => {
-    if (volume > 0) {
-      setPrevVolume(volume);
-      setVolume(0);
-      bgmEngine.setVolume(0);
-    } else {
-      const restored = prevVolume > 0 ? prevVolume : 0.5;
-      setVolume(restored);
-      bgmEngine.setVolume(restored);
-    }
   };
 
   return (
@@ -292,49 +266,6 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                 )}
               </button>
             </div>
-          </div>
-
-          {/* Vertical Volume Slider on the Far Right (쥬크박스 가장 우측 세로 볼륨 조절) */}
-          <div
-            className="flex flex-col items-center justify-between bg-white/95 hover:bg-white border border-[#bed2dc] rounded-md px-1 py-1 shadow-2xs transition-all select-none shrink-0"
-            title={`쥬크박스 볼륨: ${Math.round(volume * 100)}% (상하 드래그로 조절)`}
-          >
-            <button
-              type="button"
-              onClick={handleToggleMute}
-              className="text-[#486273] hover:text-[#ff6b2b] transition-colors p-0.5 cursor-pointer"
-              title={volume === 0 ? '음소거 해제' : '음소거'}
-              aria-label={volume === 0 ? '음소거 해제' : '음소거'}
-            >
-              {volume === 0 ? (
-                <VolumeX className="w-3 h-3 text-red-500" />
-              ) : (
-                <Volume2 className="w-3 h-3 text-[#ff6b2b]" />
-              )}
-            </button>
-
-            <div className="relative py-0.5 flex items-center justify-center">
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value={volume}
-                onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
-                aria-label="쥬크박스 세로 볼륨 조절"
-                style={{
-                  writingMode: 'vertical-lr',
-                  direction: 'rtl',
-                  height: '34px',
-                  width: '14px'
-                }}
-                className="cursor-pointer accent-[#ff6b2b]"
-              />
-            </div>
-
-            <span className="text-[8px] font-mono font-bold text-[#5c7382]">
-              {Math.round(volume * 100)}%
-            </span>
           </div>
         </div>
 

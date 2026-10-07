@@ -152,8 +152,12 @@ export const MyCdCollectionGallery: React.FC<MyCdCollectionGalleryProps> = ({
   const synthPlaybackRef = useRef<{ stop: () => void; setVolume?: (vol: number) => void } | null>(null);
   const prevVolumeRef = useRef<number>(0.8);
 
-  const handleVolumeChange = (newVol: number) => {
-    const clamped = Math.max(0, Math.min(1, newVol));
+  // Floating On-Screen Volume HUD state
+  const [showVolumeToast, setShowVolumeToast] = useState(false);
+  const volumeToastTimerRef = useRef<number | null>(null);
+
+  const handleVolumeChange = (newVol: number, triggerToast = false) => {
+    const clamped = Math.max(0, Math.min(1, Math.round(newVol * 100) / 100));
     setVolume(clamped);
     if (clamped > 0) {
       prevVolumeRef.current = clamped;
@@ -164,14 +168,74 @@ export const MyCdCollectionGallery: React.FC<MyCdCollectionGalleryProps> = ({
     if (synthPlaybackRef.current && synthPlaybackRef.current.setVolume) {
       synthPlaybackRef.current.setVolume(clamped);
     }
+    // Sync with global BGM engine volume
+    bgmEngine.setVolume(clamped);
+
+    if (triggerToast) {
+      setShowVolumeToast(true);
+      if (volumeToastTimerRef.current) {
+        window.clearTimeout(volumeToastTimerRef.current);
+      }
+      volumeToastTimerRef.current = window.setTimeout(() => {
+        setShowVolumeToast(false);
+      }, 1200);
+    }
+  };
+
+  // Keyboard Left / Right Arrow keys Volume Control
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Do not intercept when user is typing in form inputs or textareas
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        // Left arrow: Volume Down (-5%)
+        handleVolumeChange(Math.max(0, volume - 0.05), true);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        // Right arrow: Volume Up (+5%)
+        handleVolumeChange(Math.min(1, volume + 0.05), true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      if (volumeToastTimerRef.current) {
+        window.clearTimeout(volumeToastTimerRef.current);
+      }
+    };
+  }, [volume]);
+
+  // Mouse Wheel Volume Control (마우스 휠 상/하로 볼륨 조절)
+  const handleWheelVolume = (e: React.WheelEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const step = 0.05;
+    if (e.deltaY < 0 || e.deltaX < 0) {
+      // Scroll Up or Tilt Left: Volume Up (+5%)
+      handleVolumeChange(Math.min(1, volume + step), true);
+    } else if (e.deltaY > 0 || e.deltaX > 0) {
+      // Scroll Down or Tilt Right: Volume Down (-5%)
+      handleVolumeChange(Math.max(0, volume - step), true);
+    }
   };
 
   const handleToggleMute = () => {
     if (volume > 0) {
       prevVolumeRef.current = volume;
-      handleVolumeChange(0);
+      handleVolumeChange(0, true);
     } else {
-      handleVolumeChange(prevVolumeRef.current > 0 ? prevVolumeRef.current : 0.8);
+      handleVolumeChange(prevVolumeRef.current > 0 ? prevVolumeRef.current : 0.8, true);
     }
   };
 
@@ -984,7 +1048,28 @@ And kneel and say an Ave there for me.`);
   };
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col gap-2.5 h-full overflow-hidden">
+    <div className="flex-1 min-h-0 flex flex-col gap-2.5 h-full overflow-hidden relative">
+      {/* Floating On-Screen Volume HUD (키보드 좌/우 방향키 & 마우스 휠 조절 시 피드백 표시) */}
+      {showVolumeToast && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[#1e1b4b]/95 backdrop-blur-md text-white px-4 py-2 rounded-full shadow-2xl flex items-center gap-2.5 text-xs font-mono font-bold border border-purple-400/50 animate-fadeIn pointer-events-none select-none">
+          {volume === 0 ? (
+            <VolumeX className="w-4 h-4 text-red-400 shrink-0" />
+          ) : (
+            <Volume2 className="w-4 h-4 text-[#ff6b2b] shrink-0" />
+          )}
+          <span className="whitespace-nowrap">볼륨 {Math.round(volume * 100)}%</span>
+          <div className="w-24 h-1.5 bg-purple-950 rounded-full overflow-hidden border border-purple-500/30">
+            <div
+              className="h-full bg-linear-to-r from-[#ff6b2b] to-[#ea580c] transition-all duration-75"
+              style={{ width: `${Math.round(volume * 100)}%` }}
+            />
+          </div>
+          <span className="text-[10px] text-purple-300 font-normal">
+            (좌/우 방향키 · 휠)
+          </span>
+        </div>
+      )}
+
       {/* Header Banner */}
       <div className="bg-linear-to-r from-[#2e1065] via-[#4c1d95] to-[#5b21b6] text-white rounded-xl p-3.5 sm:p-4 shadow-sm border border-[#6d28d9] flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
         <div className="flex items-start sm:items-center gap-3">
@@ -1047,18 +1132,24 @@ And kneel and say an Ave there for me.`);
       )}
 
       {/* Hi-Fi CD Player Banner (When Playing or Selected) */}
+      {/* Floating Active Audio Player Bar (Slim Single-Row Compact Design) */}
       {currentlyPlayingAlbum && (
-        <div className="bg-[#1e1b4b] border-2 border-[#7c3aed] text-white rounded-xl p-3 sm:p-3.5 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fadeIn relative overflow-hidden shrink-0">
+        <div
+          onWheel={handleWheelVolume}
+          className="bg-[#1e1b4b] border-2 border-[#7c3aed] text-white rounded-xl px-2.5 py-1.5 sm:py-2 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2 animate-fadeIn relative overflow-hidden shrink-0"
+          title="재생 바 위에서 마우스 휠을 굴리거나, 키보드 좌/우(◀/▶) 방향키를 누르면 볼륨이 조절됩니다."
+        >
           {/* Ambient Glow */}
           <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-purple-600/20 rounded-full blur-2xl pointer-events-none" />
 
-          <div className="flex items-center gap-3.5 min-w-0 z-10">
+          {/* Left: Track Info & Mini Disc */}
+          <div className="flex items-center gap-2 min-w-0 z-10 flex-1">
             {/* Spinning CD Visual */}
-            <div className="relative w-14 h-14 sm:w-16 sm:h-16 shrink-0">
+            <div className="relative w-8 h-8 sm:w-9 sm:h-9 shrink-0">
               <img
                 src={currentlyPlayingAlbum.coverImageUrl || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=400&q=80'}
                 alt={currentlyPlayingAlbum.albumTitle}
-                className="w-full h-full object-cover rounded-lg shadow-md border border-white/20"
+                className="w-full h-full object-cover rounded-md shadow-md border border-white/20"
               />
               <div
                 className={`absolute inset-0 rounded-full border-2 border-white/30 flex items-center justify-center transition-all ${
@@ -1066,323 +1157,120 @@ And kneel and say an Ave there for me.`);
                 }`}
                 style={{ animationDuration: '4s' }}
               >
-                <div className="w-4 h-4 rounded-full bg-purple-900 border border-white/60 flex items-center justify-center">
-                  <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                <div className="w-2.5 h-2.5 rounded-full bg-purple-900 border border-white/60 flex items-center justify-center">
+                  <div className="w-1 h-1 rounded-full bg-white" />
                 </div>
               </div>
             </div>
 
             {/* Track Info */}
             <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] bg-[#ff6b2b] text-white px-1.5 py-0.2 rounded font-bold uppercase tracking-wider animate-pulse">
-                  {isPlaying ? 'NOW PLAYING' : 'PAUSED'}
+              <div className="flex items-center gap-1.5 flex-wrap leading-tight">
+                <span className="text-[9px] bg-[#ff6b2b] text-white px-1 py-0.2 rounded font-bold uppercase tracking-wider">
+                  {isPlaying ? 'PLAY' : 'STOP'}
                 </span>
-                <span className="text-[10px] bg-purple-900/80 border border-purple-500/40 text-purple-200 px-1.5 py-0.2 rounded font-mono">
-                  Track {currentlyPlayingAlbum.trackNumber || 1}/{currentlyPlayingAlbum.totalTracks || 15}
+                <span className="text-xs sm:text-sm font-bold text-white truncate">
+                  {currentlyPlayingAlbum.songTitle}
                 </span>
-                <span className="text-[10px] text-purple-300 font-mono">
-                  {currentlyPlayingAlbum.genre} · {currentlyPlayingAlbum.releaseYear}
+                <span className="text-[11px] font-normal text-purple-200 truncate">
+                  — {currentlyPlayingAlbum.artist}
                 </span>
               </div>
-
-              <h3 className="text-sm font-bold text-white truncate mt-0.5 flex items-center gap-1.5">
-                <span>{currentlyPlayingAlbum.songTitle}</span>
-                <span className="text-xs font-normal text-purple-200">— {currentlyPlayingAlbum.artist}</span>
-              </h3>
-              <p className="text-[11px] text-purple-300 truncate">
-                앨범: {currentlyPlayingAlbum.albumTitle}
+              <p className="text-[10px] text-purple-300 truncate leading-tight mt-0.5">
+                {currentlyPlayingAlbum.albumTitle}
               </p>
             </div>
           </div>
 
-          {/* Controls, Progress & Far-Right Vertical Volume Slider */}
-          <div className="flex items-center gap-2.5 sm:gap-3.5 z-10 shrink-0 self-end sm:self-center">
-            {/* Playback Controls & Seek Bar */}
-            <div className="flex flex-col sm:items-end gap-2">
-              <div className="flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap">
-                <button
-                  type="button"
-                  onClick={() => setIsLooping(!isLooping)}
-                  className={`p-1.5 rounded-md text-xs transition-colors cursor-pointer ${
-                    isLooping ? 'bg-purple-600 text-white' : 'text-purple-300 hover:text-white'
-                  }`}
-                  title={isLooping ? '한 곡 반복 켜짐' : '반복 끔'}
-                >
-                  <RotateCw className="w-4 h-4" />
-                </button>
+          {/* Right: Controls, Seek Bar & Volume Bar in a Compact Row */}
+          <div className="flex items-center gap-2 z-10 shrink-0 justify-between sm:justify-end">
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsLooping(!isLooping)}
+                className={`p-1 rounded text-xs transition-colors cursor-pointer ${
+                  isLooping ? 'bg-purple-600 text-white' : 'text-purple-300 hover:text-white'
+                }`}
+                title={isLooping ? '한 곡 반복 켜짐' : '반복 끔'}
+              >
+                <RotateCw className="w-3.5 h-3.5" />
+              </button>
 
-                <button
-                  type="button"
-                  onClick={() => handlePlayAlbum(currentlyPlayingAlbum)}
-                  className="w-10 h-10 rounded-full bg-[#ff6b2b] hover:bg-[#ea580c] text-white flex items-center justify-center shadow-md transition-transform active:scale-95 cursor-pointer"
-                >
-                  {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleOpenInfoModal(currentlyPlayingAlbum, 'details')}
-                  className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded-md text-xs text-purple-100 flex items-center gap-1 cursor-pointer transition-colors"
-                  title="곡 정보 세부사항 열기"
-                >
-                  <Info className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">곡 정보</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setShowPlayerLyrics(!showPlayerLyrics)}
-                  className={`px-2.5 py-1.5 rounded-md text-xs flex items-center gap-1 cursor-pointer transition-colors ${
-                    showPlayerLyrics
-                      ? 'bg-[#ff6b2b] text-white font-bold shadow-xs'
-                      : 'bg-white/10 hover:bg-white/20 border border-white/20 text-purple-100'
-                  }`}
-                  title="한글 가사 및 전체 가사창 열기"
-                >
-                  <FileText className="w-3.5 h-3.5" />
-                  <span>가사</span>
-                  <span className="text-[10px] bg-purple-900/90 text-purple-200 px-1 py-0.2 rounded border border-purple-400/40">
-                    {currentlyPlayingAlbum.koreanLyrics ? '🇰🇷 한글' : 'Lyrics'}
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handlePausePlayback}
-                  className="p-1.5 text-purple-400 hover:text-white cursor-pointer"
-                  title="플레이어 닫기"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Seek Bar */}
-              <div className="flex items-center gap-2 w-full sm:w-64 text-[10px] text-purple-300 font-mono">
-                <span>{formatSeconds(currentTime)}</span>
-                <input
-                  type="range"
-                  min="0"
-                  max={duration || 100}
-                  value={currentTime}
-                  onChange={(e) => handleSeek(parseFloat(e.target.value))}
-                  className="flex-1 h-1.5 bg-purple-950/60 rounded-full appearance-none cursor-pointer accent-[#ff6b2b]"
-                />
-                <span>{formatSeconds(duration || currentlyPlayingAlbum.audioDuration || 215)}</span>
-              </div>
+              <button
+                type="button"
+                onClick={() => handlePlayAlbum(currentlyPlayingAlbum)}
+                className="w-7 h-7 rounded-full bg-[#ff6b2b] hover:bg-[#ea580c] text-white flex items-center justify-center shadow-md transition-transform active:scale-95 cursor-pointer shrink-0"
+                title={isPlaying ? '일시정지' : '재생'}
+              >
+                {isPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current ml-0.5" />}
+              </button>
             </div>
 
-            {/* Vertical Volume Slider on the Far Right (가장 우측 세로 볼륨 조절) */}
+            {/* Seek Bar: Slim & Clean */}
+            <div className="flex items-center gap-1.5 w-32 sm:w-48 text-[10px] text-purple-300 font-mono">
+              <span className="shrink-0">{formatSeconds(currentTime)}</span>
+              <input
+                type="range"
+                min="0"
+                max={duration || 100}
+                value={currentTime}
+                onChange={(e) => handleSeek(parseFloat(e.target.value))}
+                aria-label="재생 구간 탐색"
+                className="flex-1 h-1.5 bg-purple-950/80 rounded-full appearance-none cursor-pointer accent-[#ff6b2b]"
+              />
+              <span className="shrink-0">{formatSeconds(duration || currentlyPlayingAlbum.audioDuration || 215)}</span>
+            </div>
+
+            {/* Volume Control (마우스 휠 & 드래그 & 클릭 모두 지원) */}
             <div
-              className="flex flex-col items-center justify-between bg-purple-950/90 hover:bg-purple-900/70 border border-purple-500/40 rounded-xl px-1.5 py-1.5 shadow-md transition-all select-none shrink-0"
-              title={`볼륨: ${Math.round(volume * 100)}% (상하 드래그로 조절)`}
+              onWheel={handleWheelVolume}
+              className="flex items-center gap-1 bg-purple-950/70 hover:bg-purple-950/90 px-1.5 py-0.5 rounded border border-purple-500/30 text-[10px] text-purple-300 font-mono select-none cursor-pointer"
+              title={`볼륨: ${Math.round(volume * 100)}% (마우스 휠을 굴리거나 좌/우 방향키로 조절)`}
             >
               <button
                 type="button"
                 onClick={handleToggleMute}
-                className="text-purple-300 hover:text-white transition-colors p-0.5 cursor-pointer"
+                className="text-purple-300 hover:text-white transition-colors p-0.5 cursor-pointer shrink-0"
                 title={volume === 0 ? '음소거 해제' : '음소거'}
               >
                 {volume === 0 ? (
-                  <VolumeX className="w-3.5 h-3.5 text-red-400" />
+                  <VolumeX className="w-3 h-3 text-red-400" />
                 ) : (
-                  <Volume2 className="w-3.5 h-3.5 text-[#ff6b2b]" />
+                  <Volume2 className="w-3 h-3 text-[#ff6b2b]" />
                 )}
               </button>
 
-              <div className="relative py-1 flex items-center justify-center">
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={volume}
-                  onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
-                  aria-label="세로 볼륨 조절"
-                  style={{
-                    writingMode: 'vertical-lr',
-                    direction: 'rtl',
-                    height: '46px',
-                    width: '16px'
-                  }}
-                  className="cursor-pointer accent-[#ff6b2b]"
-                />
-              </div>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={volume}
+                onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                aria-label="볼륨 조절"
+                className="w-14 sm:w-20 h-1 bg-purple-900/80 rounded-full appearance-none cursor-pointer accent-[#ff6b2b]"
+              />
 
-              <span className="text-[9px] font-mono font-bold text-purple-200">
+              <span className="w-6 text-right font-mono font-bold text-purple-200 shrink-0 text-[9px]">
                 {Math.round(volume * 100)}%
               </span>
             </div>
+
+            <button
+              type="button"
+              onClick={handlePausePlayback}
+              className="p-1 text-purple-400 hover:text-white cursor-pointer shrink-0 ml-0.5"
+              title="플레이어 닫기"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
-
-          {/* Collapsible Hi-Fi Lyrics Drawer */}
-          {showPlayerLyrics && (
-            <div className="w-full mt-3 pt-3 border-t border-purple-500/30 z-10 flex flex-col gap-2.5 animate-fadeIn">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-purple-950/60 p-2.5 rounded-lg border border-purple-800/40">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                    <FileText className="w-4 h-4 text-[#ff6b2b]" />
-                    <span>{currentlyPlayingAlbum.songTitle}</span>
-                    <span className="text-purple-300 font-normal text-[11px]">— 가사 감상</span>
-                  </span>
-
-                  {/* Mode Toggles */}
-                  <div className="flex items-center rounded-md bg-purple-900/60 p-0.5 text-[11px] font-medium border border-purple-700/50">
-                    <button
-                      type="button"
-                      onClick={() => setPlayerLyricsViewMode('korean')}
-                      className={`px-2.5 py-1 rounded transition-all cursor-pointer ${
-                        playerLyricsViewMode === 'korean'
-                          ? 'bg-[#ff6b2b] text-white font-bold shadow-xs'
-                          : 'text-purple-200 hover:text-white'
-                      }`}
-                    >
-                      🇰🇷 한글 번역/해석 가사
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPlayerLyricsViewMode('original')}
-                      className={`px-2.5 py-1 rounded transition-all cursor-pointer ${
-                        playerLyricsViewMode === 'original'
-                          ? 'bg-purple-700 text-white font-bold shadow-xs'
-                          : 'text-purple-200 hover:text-white'
-                      }`}
-                    >
-                      🌐 원문 가사
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPlayerLyricsViewMode('bilingual')}
-                      className={`px-2.5 py-1 rounded transition-all cursor-pointer ${
-                        playerLyricsViewMode === 'bilingual'
-                          ? 'bg-purple-700 text-white font-bold shadow-xs'
-                          : 'text-purple-200 hover:text-white'
-                      }`}
-                    >
-                      📖 한글·원문 나란히
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {/* Font Size controls */}
-                  <div className="flex items-center rounded bg-purple-900/60 px-1 py-0.5 text-[11px] border border-purple-700/50">
-                    <button
-                      type="button"
-                      onClick={() => setLyricsFontSize('sm')}
-                      className={`px-1.5 py-0.5 rounded cursor-pointer ${lyricsFontSize === 'sm' ? 'bg-purple-700 text-white font-bold' : 'text-purple-300'}`}
-                      title="글자 작게"
-                    >
-                      A-
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setLyricsFontSize('base')}
-                      className={`px-1.5 py-0.5 rounded cursor-pointer ${lyricsFontSize === 'base' ? 'bg-purple-700 text-white font-bold' : 'text-purple-300'}`}
-                      title="보통 크기"
-                    >
-                      기본
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setLyricsFontSize('lg')}
-                      className={`px-1.5 py-0.5 rounded cursor-pointer ${lyricsFontSize === 'lg' ? 'bg-purple-700 text-white font-bold' : 'text-purple-300'}`}
-                      title="글자 크게"
-                    >
-                      A+
-                    </button>
-                  </div>
-
-                  {/* Copy Button */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const textToCopy =
-                        playerLyricsViewMode === 'korean'
-                          ? currentlyPlayingAlbum.koreanLyrics || currentlyPlayingAlbum.lyrics || ''
-                          : playerLyricsViewMode === 'original'
-                          ? currentlyPlayingAlbum.lyrics || currentlyPlayingAlbum.koreanLyrics || ''
-                          : `[원문]\n${currentlyPlayingAlbum.lyrics || ''}\n\n[한글 번역]\n${currentlyPlayingAlbum.koreanLyrics || ''}`;
-                      handleCopyLyrics(textToCopy);
-                    }}
-                    className="px-2 py-1 bg-white/10 hover:bg-white/20 border border-white/20 rounded text-[11px] text-purple-200 flex items-center gap-1 cursor-pointer transition-colors"
-                  >
-                    {lyricsCopied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{lyricsCopied ? '복사됨' : '복사'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowPlayerLyrics(false)}
-                    className="p-1 text-purple-400 hover:text-white rounded cursor-pointer"
-                    title="가사창 닫기"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Lyrics Content Box */}
-              <div
-                className={`bg-[#0d0929]/80 border border-purple-800/50 rounded-lg p-4 max-h-[320px] overflow-y-auto leading-relaxed text-purple-100 shadow-inner ${
-                  lyricsFontSize === 'sm' ? 'text-xs' : lyricsFontSize === 'lg' ? 'text-base font-medium' : 'text-sm'
-                }`}
-              >
-                {playerLyricsViewMode === 'korean' && (
-                  <div>
-                    {currentlyPlayingAlbum.koreanLyrics ? (
-                      <div className="whitespace-pre-wrap font-sans text-purple-50 tracking-wide">
-                        {currentlyPlayingAlbum.koreanLyrics}
-                      </div>
-                    ) : (
-                      <div className="text-center py-6 text-purple-300">
-                        <p className="mb-2">등록된 한글 가사가 없습니다.</p>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const found = getKoreanLyricsForSong(currentlyPlayingAlbum.songTitle, currentlyPlayingAlbum.artist, currentlyPlayingAlbum.lyrics);
-                            if (found) {
-                              onUpdateAlbum(currentlyPlayingAlbum.id, { koreanLyrics: found });
-                            }
-                          }}
-                          className="px-3 py-1.5 bg-[#ff6b2b] text-white rounded text-xs font-bold hover:bg-[#ea580c] cursor-pointer"
-                        >
-                          ✨ 한글 번역 가사 자동 가져오기
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {playerLyricsViewMode === 'original' && (
-                  <div>
-                    {currentlyPlayingAlbum.lyrics ? (
-                      <div className="whitespace-pre-wrap font-mono text-purple-100 tracking-wide">
-                        {currentlyPlayingAlbum.lyrics}
-                      </div>
-                    ) : (
-                      <p className="text-center py-6 text-purple-400">등록된 원문 가사가 없습니다.</p>
-                    )}
-                  </div>
-                )}
-
-                {playerLyricsViewMode === 'bilingual' && (
-                  <div>
-                    {renderBilingualPlayerLyrics(
-                      currentlyPlayingAlbum.lyrics || '',
-                      currentlyPlayingAlbum.koreanLyrics || getKoreanLyricsForSong(currentlyPlayingAlbum.songTitle, currentlyPlayingAlbum.artist, currentlyPlayingAlbum.lyrics) || ''
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
       {/* Filter and Search Bar */}
-      <div className="bg-white border border-[#cddfe7] rounded-xl p-3 shadow-2xs flex flex-col gap-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+      <div className="bg-white border border-[#cddfe7] rounded-xl p-2 sm:p-2.5 shadow-2xs flex flex-col gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           {/* Search Input */}
           <div className="relative flex-1">
             <Search className="w-4 h-4 text-[#8fa4b3] absolute left-3 top-1/2 -translate-y-1/2" />
@@ -1391,7 +1279,7 @@ And kneel and say an Ave there for me.`);
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="노래 제목, 아티스트, 앨범명, 작곡가, 주석 검색..."
-              className="w-full pl-9 pr-8 py-2 bg-[#f8fafc] border border-[#cbd5e1] rounded-lg text-xs text-[#1e293b] outline-hidden focus:border-[#7c3aed] focus:bg-white transition-all"
+              className="w-full pl-9 pr-8 py-1.5 bg-[#f8fafc] border border-[#cbd5e1] rounded-lg text-xs text-[#1e293b] outline-hidden focus:border-[#7c3aed] focus:bg-white transition-all"
             />
             {searchQuery && (
               <button
@@ -1508,7 +1396,7 @@ And kneel and say an Ave there for me.`);
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 min-[1920px]:grid-cols-6 gap-3 sm:gap-3.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2 sm:gap-2.5">
           {filteredAlbums.map((album) => {
             const isThisPlaying = playingAlbumId === album.id && isPlaying;
 
@@ -1532,7 +1420,7 @@ And kneel and say an Ave there for me.`);
 
                   {/* CD Disc Visual Peeking Out */}
                   <div
-                    className={`absolute -right-12 top-1/2 -translate-y-1/2 w-32 h-32 rounded-full border-4 border-white/40 shadow-2xl transition-transform duration-500 pointer-events-none ${
+                    className={`absolute -right-8 top-1/2 -translate-y-1/2 w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-white/40 shadow-xl transition-transform duration-500 pointer-events-none ${
                       isThisPlaying
                         ? 'translate-x-0 animate-spin'
                         : 'group-hover:-translate-x-2'
@@ -1543,41 +1431,41 @@ And kneel and say an Ave there for me.`);
                     }}
                   >
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-8 h-8 rounded-full border-2 border-white/60 bg-purple-900/80 flex items-center justify-center">
-                        <div className="w-2.5 h-2.5 rounded-full bg-white" />
+                      <div className="w-6 h-6 rounded-full border border-white/60 bg-purple-900/80 flex items-center justify-center">
+                        <div className="w-2 h-2 rounded-full bg-white" />
                       </div>
                     </div>
                   </div>
 
                   {/* Top Badges */}
-                  <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 z-10">
-                    <span className="bg-black/70 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-md border border-white/20">
+                  <div className="absolute top-1.5 left-1.5 flex items-center gap-1 z-10">
+                    <span className="bg-black/75 backdrop-blur-xs text-white text-[9px] font-bold px-1.5 py-0.2 rounded border border-white/20">
                       {album.genre}
                     </span>
-                    <span className="bg-black/70 backdrop-blur-xs text-[#fde047] text-[10px] font-bold px-1.5 py-0.5 rounded-md border border-white/20">
+                    <span className="bg-black/75 backdrop-blur-xs text-[#fde047] text-[9px] font-bold px-1 py-0.2 rounded border border-white/20">
                       {album.releaseYear}
                     </span>
                   </div>
 
                   {/* Top Right Favorite / Rating */}
-                  <div className="absolute top-2.5 right-2.5 flex items-center gap-1 z-10">
+                  <div className="absolute top-1.5 right-1.5 flex items-center gap-1 z-10">
                     <button
                       type="button"
                       onClick={() => onUpdateAlbum(album.id, { isFavorite: !album.isFavorite })}
-                      className={`p-1.5 rounded-full backdrop-blur-xs transition-colors cursor-pointer ${
+                      className={`p-1 rounded-full backdrop-blur-xs transition-colors cursor-pointer ${
                         album.isFavorite ? 'bg-red-600/90 text-white' : 'bg-black/40 text-white hover:text-red-400'
                       }`}
                       title={album.isFavorite ? '즐겨찾기 해제' : '즐겨찾기 추가'}
                     >
-                      <Heart className="w-3.5 h-3.5 fill-current" />
+                      <Heart className="w-3 h-3 fill-current" />
                     </button>
                   </div>
 
-                  {/* Bottom Overlay with Big Play Button */}
-                  <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent flex items-end p-3">
+                  {/* Bottom Overlay with Play Button */}
+                  <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent flex items-end p-2 sm:p-2.5">
                     <div className="flex items-center justify-between w-full">
-                      <div className="text-white min-w-0 pr-2">
-                        <span className="text-[10px] text-purple-300 font-mono block">
+                      <div className="text-white min-w-0 pr-1.5">
+                        <span className="text-[9px] text-purple-300 font-mono block">
                           Tr. {album.trackNumber || 1} / {album.totalTracks || 15}
                         </span>
                         <h4 className="text-xs font-bold text-white truncate drop-shadow-sm">
@@ -1589,7 +1477,7 @@ And kneel and say an Ave there for me.`);
                       <button
                         type="button"
                         onClick={() => handlePlayAlbum(album)}
-                        className={`w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-transform active:scale-90 cursor-pointer shrink-0 ${
+                        className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shadow-lg transition-transform active:scale-90 cursor-pointer shrink-0 ${
                           isThisPlaying
                             ? 'bg-[#ff6b2b] text-white'
                             : 'bg-white text-[#7c3aed] hover:bg-[#ff6b2b] hover:text-white'
@@ -1597,88 +1485,65 @@ And kneel and say an Ave there for me.`);
                         title={isThisPlaying ? '일시정지' : '음원 재생'}
                       >
                         {isThisPlaying ? (
-                          <Pause className="w-4 h-4 fill-current" />
+                          <Pause className="w-3.5 h-3.5 fill-current" />
                         ) : (
-                          <Play className="w-4 h-4 fill-current ml-0.5" />
+                          <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
                         )}
                       </button>
                     </div>
                   </div>
                 </div>
 
-                {/* Album Details Body */}
-                <div className="p-3.5 flex flex-col gap-2 flex-1 justify-between bg-white">
+                {/* Album Details Body - Ultra-compact for iPad 2-row view */}
+                <div className="p-2 sm:p-2.5 flex flex-col justify-between gap-1 bg-white flex-1">
                   <div>
-                    <div className="flex items-start justify-between gap-1">
-                      <div>
-                        <h4 className="text-sm font-bold text-[#0f172a] hover:text-[#7c3aed] transition-colors line-clamp-1 cursor-pointer"
-                          onClick={() => handleOpenInfoModal(album, 'details')}
-                          title={album.songTitle}
-                        >
-                          {album.songTitle}
-                        </h4>
-                        <p className="text-xs font-medium text-[#475569] line-clamp-1">
-                          {album.artist}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="text-[11px] text-[#64748b] mt-1.5 flex flex-col gap-0.5">
-                      <p className="truncate">
-                        <span className="font-semibold text-[#334155]">앨범:</span> {album.albumTitle}
-                      </p>
-                      {album.composer && (
-                        <p className="truncate">
-                          <span className="font-semibold text-[#334155]">작곡:</span> {album.composer}
-                        </p>
+                    <h4
+                      className="text-xs sm:text-[13px] font-bold text-[#0f172a] hover:text-[#7c3aed] transition-colors truncate cursor-pointer leading-snug"
+                      onClick={() => handleOpenInfoModal(album, 'details')}
+                      title={album.songTitle}
+                    >
+                      {album.songTitle}
+                    </h4>
+                    <p className="text-[11px] text-[#475569] truncate leading-tight mt-0.5">
+                      <span className="font-medium">{album.artist}</span>
+                      {album.albumTitle && (
+                        <span className="text-[#8e9aa8] ml-1">· {album.albumTitle}</span>
                       )}
-                    </div>
-
-                    {/* Star Rating & Play Count */}
-                    <div className="flex items-center justify-between text-xs mt-2 pt-2 border-t border-[#f1f5f9]">
-                      <div className="flex items-center text-[#eab308]">
-                        {[1, 2, 3, 4, 5].map((s) => (
-                          <Star
-                            key={s}
-                            className={`w-3.5 h-3.5 ${
-                              s <= album.rating ? 'fill-current' : 'text-gray-300'
-                            }`}
-                          />
-                        ))}
-                      </div>
-
-                      <div className="text-[11px] text-[#94a3b8] font-mono">
-                        재생 {album.playCount || 0}회
-                      </div>
-                    </div>
+                    </p>
                   </div>
 
-                  {/* Bottom Action Buttons */}
-                  <div className="flex items-center justify-between pt-2 border-t border-[#f1f5f9] text-xs">
-                    <div className="flex items-center gap-1.5 flex-wrap">
+                  {/* Bottom Single Line: "곡정보 가사 5회" + Admin controls */}
+                  <div className="flex items-center justify-between pt-1 border-t border-[#f1f5f9] text-[11px] gap-1 mt-0.5">
+                    <div className="flex items-center gap-1.5 shrink-0 flex-nowrap">
                       <button
                         type="button"
                         onClick={() => handleOpenInfoModal(album, 'details')}
-                        className="px-2 py-1 bg-[#f8fafc] hover:bg-[#ede9fe] text-[#7c3aed] border border-[#e2e8f0] rounded-md font-bold text-[11px] flex items-center gap-1 transition-colors cursor-pointer"
+                        className="px-1.5 py-0.5 bg-[#f8fafc] hover:bg-[#ede9fe] text-[#7c3aed] border border-[#e2e8f0] rounded font-semibold text-[10px] sm:text-[11px] whitespace-nowrap transition-colors cursor-pointer"
                         title="곡 정보 세부사항"
                       >
-                        <Info className="w-3.5 h-3.5" />
-                        <span>곡 정보</span>
+                        곡정보
                       </button>
 
                       <button
                         type="button"
                         onClick={() => handleOpenInfoModal(album, 'lyrics')}
-                        className="px-2 py-1 bg-[#fff5ee] hover:bg-[#ffe8dc] text-[#ff6b2b] border border-[#ffd8c2] rounded-md font-bold text-[11px] flex items-center gap-1 transition-colors cursor-pointer"
+                        className="px-1.5 py-0.5 bg-[#fff5ee] hover:bg-[#ffe8dc] text-[#ff6b2b] border border-[#ffd8c2] rounded font-semibold text-[10px] sm:text-[11px] whitespace-nowrap transition-colors cursor-pointer"
                         title="한글 가사 및 원문 가사 보기"
                       >
-                        <FileText className="w-3.5 h-3.5" />
-                        <span>가사 {album.koreanLyrics ? '🇰🇷' : ''}</span>
+                        가사
                       </button>
+
+                      {/* 재생 횟수: 곡정보 가사 5회 로 표시 */}
+                      <span
+                        className="text-[10px] sm:text-[11px] font-mono font-medium text-[#64748b] bg-[#f1f5f9] px-1.5 py-0.5 rounded border border-[#e2e8f0] whitespace-nowrap"
+                        title={`누적 재생 ${album.playCount || 0}회`}
+                      >
+                        {album.playCount || 0}회
+                      </span>
                     </div>
 
                     {isAdmin && (
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-0.5">
                         <button
                           type="button"
                           onClick={() => onUpdateAlbum(album.id, { pinned: !album.pinned })}
