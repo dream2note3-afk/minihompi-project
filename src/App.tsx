@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { MediaItem, GuestbookEntry, UserSession, ActiveTab, ProfileConfig, TravelSpot, CdReviewItem, ThemePaletteId, IlchonFriend, IlchonNote, VisitorStatsData, MyCdAlbum } from './types';
+import { MediaItem, GuestbookEntry, UserSession, ActiveTab, ProfileConfig, TravelSpot, CdReviewItem, ThemePaletteId, IlchonFriend, IlchonNote, VisitorStatsData, MyCdAlbum, CdFilterType } from './types';
 import { INITIAL_MEDIA_ITEMS, INITIAL_GUESTBOOK_ENTRIES, INITIAL_PROFILE_CONFIG, INITIAL_TRAVEL_SPOTS, INITIAL_CD_REVIEWS, INITIAL_ILCHON_FRIENDS, INITIAL_ILCHON_NOTES, INITIAL_MY_CD_ALBUMS } from './data/initialData';
 import { getThemePalette } from './utils/themePalettes';
 import { TopHeader } from './components/TopHeader';
@@ -19,7 +19,6 @@ import { MyCdCollectionGallery } from './components/MyCdCollectionGallery';
 import { AdminLoginModal } from './components/AdminLoginModal';
 import { EditIconPanel } from './components/EditIconPanel';
 import { Guestbook } from './components/Guestbook';
-import { BgmManagerPanel } from './components/BgmManagerPanel';
 import { Miniroom } from './components/Miniroom';
 import { IlchonChatModal } from './components/IlchonChatModal';
 import { bgmEngine } from './utils/audioSynth';
@@ -197,6 +196,15 @@ export default function App() {
     }
     return INITIAL_MY_CD_ALBUMS.filter((a) => !PERMANENTLY_DELETED_CD_IDS.has(a.id) && a.id !== 'mycd-1791369288259');
   });
+
+  // CD Collection iTunes sidebar controls
+  const [cdSearchQuery, setCdSearchQuery] = useState('');
+  const [cdSelectedGenre, setCdSelectedGenre] = useState('all');
+  const [cdFilterType, setCdFilterType] = useState<CdFilterType>('all');
+  const [cdSortOption, setCdSortOption] = useState<'newest' | 'year_desc' | 'year_asc' | 'song_asc' | 'artist_asc' | 'rating' | 'plays'>('newest');
+  const [cdIsAddModalOpen, setCdIsAddModalOpen] = useState(false);
+  const [cdIsBackupModalOpen, setCdIsBackupModalOpen] = useState(false);
+  const [cdShuffleTrigger, setCdShuffleTrigger] = useState(0);
 
   // Ilchon (Close Friends) state with localStorage
   const [ilchonFriends, setIlchonFriends] = useState<IlchonFriend[]>(() => {
@@ -585,6 +593,16 @@ export default function App() {
       unsubBgm();
     };
   }, []);
+
+  // 소장 CD/음원 탭에서 다른 메뉴로 이동 시 재생 음원 즉시 완전 중단 (배경 재생 및 중복 재생 방지)
+  useEffect(() => {
+    if (activeTab !== 'my_cd_collection') {
+      window.dispatchEvent(new CustomEvent('app-audio-stop-all'));
+      try {
+        bgmEngine.pause();
+      } catch {}
+    }
+  }, [activeTab]);
 
   // Global Keyboard Left / Right arrow volume control when not in my_cd_collection tab
   const [globalVolumeToast, setGlobalVolumeToast] = useState<{ volume: number; visible: boolean }>({
@@ -1231,16 +1249,11 @@ export default function App() {
         }}
       >
         
-        {/* Top Header: Logo Tile + Title + Visitor Stats + BGM Player + Quick Skin Palette Switcher */}
-        <div className="shrink-0">
+        {/* Top Header: Logo Tile + Title + Visitor Stats */}
+        <div className="shrink-0 mb-0.5">
           <TopHeader
             todayVisits={todayVisits}
             totalVisits={totalVisits}
-            cloudSynced={cloudSynced}
-            themePalette={profile.themePalette}
-            onSelectTheme={handleQuickThemeSelect}
-            onOpenThemeSettings={session?.isAdmin ? () => setActiveTab('edit_profile') : undefined}
-            isAdmin={!!session?.isAdmin}
           />
         </div>
 
@@ -1271,6 +1284,20 @@ export default function App() {
               onUpdateIlchonStatus={handleUpdateIlchonStatus}
               onDeleteIlchon={handleDeleteIlchon}
               onOpenChat={setActiveChatFriend}
+              // CD Collection iTunes sidebar mode
+              isCdCollectionMode={activeTab === 'my_cd_collection'}
+              cdAlbums={myCdAlbums}
+              cdSearchQuery={cdSearchQuery}
+              onCdSearchChange={setCdSearchQuery}
+              cdSelectedGenre={cdSelectedGenre}
+              onCdSelectGenre={setCdSelectedGenre}
+              cdFilterType={cdFilterType}
+              onCdFilterTypeChange={setCdFilterType}
+              cdSortOption={cdSortOption}
+              onCdSortOptionChange={setCdSortOption}
+              onCdOpenAddModal={() => setCdIsAddModalOpen(true)}
+              onCdOpenBackupModal={() => setCdIsBackupModalOpen(true)}
+              onCdShufflePlay={() => setCdShuffleTrigger((prev) => prev + 1)}
             />
           </div>
 
@@ -1295,7 +1322,6 @@ export default function App() {
                     {activeTab === 'travel_food' && '국내 여행&맛집 (주요 여행지 & 미식 핫플 아카이브)'}
                     {activeTab === 'cd_review' && '구매CD 검토 (소장 음반 & 온/오프라인 판매처 링크)'}
                     {activeTab === 'guestbook' && '방명록 & 일촌 맺기 (누구나 자유롭게 발자국 남기고 일촌 신청)'}
-                    {activeTab === 'bgm_manage' && '음악 재생 & 반복 설정 메뉴 (1곡반복·선택반복·업로드)'}
                     {activeTab === 'edit_profile' && '권용우의 아이콘 수정 (프로필 & 아바타 커스텀)'}
                     {activeTab === 'admin' && '관리자 센터 (dream2note3@gmail.com)'}
                   </h2>
@@ -1368,6 +1394,19 @@ export default function App() {
                   onUpdateAlbum={handleUpdateMyCdAlbum}
                   onDeleteAlbum={handleDeleteMyCdAlbum}
                   isAdmin={!!session?.isAdmin}
+                  searchQuery={cdSearchQuery}
+                  onSearchQueryChange={setCdSearchQuery}
+                  selectedGenre={cdSelectedGenre}
+                  onSelectedGenreChange={setCdSelectedGenre}
+                  filterType={cdFilterType}
+                  onFilterTypeChange={setCdFilterType}
+                  sortOption={cdSortOption}
+                  onSortOptionChange={setCdSortOption}
+                  externalAddModalOpen={cdIsAddModalOpen}
+                  onExternalAddModalClose={() => setCdIsAddModalOpen(false)}
+                  externalBackupModalOpen={cdIsBackupModalOpen}
+                  onExternalBackupModalClose={() => setCdIsBackupModalOpen(false)}
+                  shuffleTrigger={cdShuffleTrigger}
                 />
               )}
 
@@ -1383,7 +1422,6 @@ export default function App() {
 
               {activeTab === 'miniroom' && (
                 <Miniroom
-                  onOpenBgmManager={() => setActiveTab('bgm_manage')}
                   onReturnToGallery={() => setActiveTab('gallery')}
                   onSetAsProfilePhoto={(dataUrl: string) => {
                     handleSaveProfileConfig({
@@ -1394,10 +1432,6 @@ export default function App() {
                     });
                   }}
                 />
-              )}
-
-              {activeTab === 'bgm_manage' && (
-                <BgmManagerPanel onReturnToGallery={() => setActiveTab('gallery')} />
               )}
 
               {activeTab === 'edit_profile' && (

@@ -184,7 +184,9 @@ export interface MyCdAlbum {
   likes?: number;           // 추천수
 }
 
-export type ActiveTab = 'gallery' | 'miniroom' | 'guestbook' | 'upload_facebook' | 'upload_youtube' | 'travel_food' | 'cd_review' | 'my_cd_collection' | 'bgm_manage' | 'edit_profile' | 'admin';
+export type CdFilterType = 'all' | 'favorites' | 'five_stars' | 'pinned' | 'unlinked';
+
+export type ActiveTab = 'gallery' | 'miniroom' | 'guestbook' | 'upload_facebook' | 'upload_youtube' | 'travel_food' | 'cd_review' | 'my_cd_collection' | 'edit_profile' | 'admin';
 
 export interface DailyVisitStat {
   date: string;       // e.g. "09/25", "10/01"

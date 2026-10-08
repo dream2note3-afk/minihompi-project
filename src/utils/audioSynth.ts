@@ -5,7 +5,8 @@ import {
   deleteAudioTrackFromDB,
   StoredAudioTrack,
   getNormalizedAudioBlob,
-  readFileAsDataUrl
+  readFileAsDataUrl,
+  findCdAudio
 } from './audioStorage';
 
 export type TrackSourceType = 'synth' | 'audio_file';
@@ -104,6 +105,8 @@ class BgmEngine {
   private listeners: (() => void)[] = [];
   private currentTime: number = 0;
   private duration: number = 0;
+  private cdSynthHandle: { stop: () => void; setVolume: (vol: number) => void } | null = null;
+  private registeredCdAlbums: any[] = [];
   
   // Playback repeat mode: 'all' | 'repeat_one' | 'repeat_selected' | 'repeat_custom'
   private playMode: BgmPlayMode = 'all';
@@ -417,6 +420,9 @@ class BgmEngine {
     if (this.audioElement) {
       this.audioElement.volume = this.volume;
     }
+    if (this.cdSynthHandle) {
+      this.cdSynthHandle.setVolume(this.volume);
+    }
     this.notify();
   }
 
@@ -484,6 +490,118 @@ class BgmEngine {
       window.clearTimeout(this.noteTimer);
       this.noteTimer = null;
     }
+    if (this.cdSynthHandle) {
+      this.cdSynthHandle.stop();
+      this.cdSynthHandle = null;
+    }
+  }
+
+  public syncRegisteredCdAlbums(albums: any[]) {
+    this.registeredCdAlbums = albums || [];
+  }
+
+  public getRegisteredCdAlbums(): any[] {
+    return this.registeredCdAlbums;
+  }
+
+  public async playCdAlbumTrack(album: {
+    id: string;
+    songTitle: string;
+    artist: string;
+    albumTitle?: string;
+    genre?: string;
+    coverUrl?: string;
+    audioUrl?: string;
+    audioFileName?: string;
+  }) {
+    unlockAudioContext();
+    this.stopCurrent();
+
+    // Check if real audio exists in IndexedDB or direct audioUrl
+    let src = (album.audioUrl || '').trim();
+    if (!src) {
+      try {
+        const stored = await findCdAudio(album.id, album.audioFileName, album.songTitle);
+        if (stored) {
+          if (stored.blob) {
+            const normalized = getNormalizedAudioBlob(stored.blob, stored.fileName || album.audioFileName || 'audio.mp3');
+            src = URL.createObjectURL(normalized);
+          } else if (stored.dataUrl) {
+            src = stored.dataUrl;
+          }
+        }
+      } catch (err) {
+        console.warn('Error fetching CD audio:', err);
+      }
+    }
+
+    const cdTrack: BgmTrack = {
+      id: album.id,
+      title: album.songTitle,
+      artist: album.artist,
+      type: src ? 'audio_file' : 'synth',
+      audioUrl: src || undefined,
+      isCustom: true
+    };
+
+    const existingIdx = this.playlist.findIndex(
+      (t) => t.id === album.id || (t.title === album.songTitle && t.artist === album.artist)
+    );
+    if (existingIdx !== -1) {
+      this.playlist[existingIdx] = cdTrack;
+      this.currentTrackIdx = existingIdx;
+    } else {
+      this.playlist = [cdTrack, ...this.playlist];
+      this.currentTrackIdx = 0;
+    }
+
+    this.isPlaying = true;
+
+    if (src && this.audioElement) {
+      this.audioElement.src = src;
+      this.audioElement.volume = this.volume;
+      this.audioElement.play().catch((err) => {
+        console.warn('Playback error, falling back to synth', err);
+        this.fallbackToCdSynth(album.songTitle);
+      });
+    } else {
+      this.fallbackToCdSynth(album.songTitle);
+    }
+
+    this.notify();
+  }
+
+  private fallbackToCdSynth(title: string) {
+    if (this.audioElement) {
+      this.audioElement.pause();
+    }
+    this.cdSynthHandle = playCdSynthMelody(
+      title,
+      (time, total) => {
+        this.currentTime = time;
+        this.duration = total;
+        this.notify();
+      },
+      () => {
+        if (this.playMode === 'repeat_one') {
+          this.fallbackToCdSynth(title);
+        } else {
+          this.nextTrack(false);
+        }
+      },
+      this.volume
+    );
+  }
+
+  public playRandomRegisteredTrack() {
+    if (this.registeredCdAlbums.length > 0) {
+      const randomAlbum = this.registeredCdAlbums[Math.floor(Math.random() * this.registeredCdAlbums.length)];
+      if (randomAlbum) {
+        this.playCdAlbumTrack(randomAlbum);
+        return;
+      }
+    }
+    this.playRandomTrack();
   }
 
   public replayCurrentTrack() {

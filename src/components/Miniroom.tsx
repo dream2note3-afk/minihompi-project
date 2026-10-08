@@ -140,13 +140,11 @@ const STORAGE_KEY = 'kwon_studio_miniroom_items_v1';
 const THEME_STORAGE_KEY = 'kwon_studio_miniroom_theme_v1';
 
 interface MiniroomProps {
-  onOpenBgmManager?: () => void;
   onReturnToGallery?: () => void;
   onSetAsProfilePhoto?: (dataUrl: string) => void;
 }
 
 export const Miniroom: React.FC<MiniroomProps> = ({
-  onOpenBgmManager,
   onReturnToGallery,
   onSetAsProfilePhoto
 }) => {
@@ -624,58 +622,6 @@ export const Miniroom: React.FC<MiniroomProps> = ({
       {/* 2. Interactive Room Canvas with 🌟 NOW PLAYING BGM OVERLAY 🌟 */}
       <div className="relative rounded-2xl overflow-hidden border-4 border-[#334155] shadow-2xl select-none">
         {/* ========================================================================= */}
-        {/* 🌟 USER REQUEST: NOW PLAYING BGM OVERLAY COMPONENT 🌟 */}
-        {/* ========================================================================= */}
-        <div className="absolute top-3 right-3 z-30 flex items-center gap-2">
-          <div
-            onClick={onOpenBgmManager}
-            className="group flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/75 hover:bg-black/90 backdrop-blur-md border border-white/25 shadow-xl text-white cursor-pointer transition-all duration-200 hover:scale-105 active:scale-95"
-            title="클릭 시 BGM 관리 & 반복 설정 메뉴로 이동합니다"
-          >
-            {/* Animated Turntable / Soundwave Icon */}
-            <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-transform ${
-              isPlaying ? 'bg-[#ff6b2b] text-white animate-spin [animation-duration:3s]' : 'bg-gray-700 text-gray-300'
-            }`}>
-              <Disc3 className="w-3.5 h-3.5" />
-            </div>
-
-            {/* Track Info */}
-            <div className="flex flex-col text-left max-w-[130px] sm:max-w-[190px]">
-              <div className="flex items-center gap-1 leading-none">
-                <span className="text-[9px] text-[#ff9f43] font-bold font-mono tracking-tight">
-                  NOW BGM
-                </span>
-                {isPlaying ? (
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" />
-                ) : (
-                  <span className="text-[9px] text-gray-400">일시정지</span>
-                )}
-              </div>
-              <span className="text-[11px] font-bold truncate group-hover:text-[#ff9f43] transition-colors">
-                {currentTrack.title}
-              </span>
-            </div>
-
-            {/* Jump to BGM Settings Hint */}
-            <div className="pl-1 border-l border-white/20 text-gray-300 group-hover:text-white flex items-center">
-              <ExternalLink className="w-3.5 h-3.5 text-[#ff9f43]" />
-            </div>
-          </div>
-
-          {/* Quick Play/Pause Mini Toggle */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              bgmEngine.togglePlay();
-            }}
-            className="w-7 h-7 rounded-full bg-black/75 hover:bg-black/90 border border-white/25 text-white flex items-center justify-center shadow-lg transition-transform hover:scale-110 active:scale-95 cursor-pointer"
-            title={isPlaying ? 'BGM 일시정지' : 'BGM 재생'}
-          >
-            {isPlaying ? <Pause className="w-3 h-3 fill-current" /> : <Play className="w-3 h-3 fill-current ml-0.5" />}
-          </button>
-        </div>
-
         {/* Room Theme Tag */}
         <div className="absolute top-3 left-3 z-30 pointer-events-none">
           <div className="px-2.5 py-1 rounded-md bg-black/60 backdrop-blur-xs border border-white/20 text-white text-[10px] font-mono flex items-center gap-1.5 shadow-md">
@@ -979,20 +925,9 @@ export const Miniroom: React.FC<MiniroomProps> = ({
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-[#ff6b2b] shrink-0" />
           <span>
-            <strong>사용 팁:</strong> 배치된 소품을 손가락이나 마우스로 원하는 위치로 끌어다 놓고, 상단의 <strong>[NOW BGM]</strong> 오버레이를 클릭하면 재생목록 및 반복 설정을 바로 변경할 수 있습니다.
+            <strong>사용 팁:</strong> 배치된 소품을 손가락이나 마우스로 원하는 위치로 끌어다 놓고 자유롭게 미니룸을 꾸며보세요.
           </span>
         </div>
-
-        {onOpenBgmManager && (
-          <button
-            type="button"
-            onClick={onOpenBgmManager}
-            className="px-2.5 py-1 bg-white hover:bg-[#ffece0] text-[#e05619] border border-[#ffcdb5] rounded text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer shrink-0"
-          >
-            <Music className="w-3.5 h-3.5" />
-            <span>BGM 상세 설정 바로가기</span>
-          </button>
-        )}
       </div>
 
       {/* ============================================================ */}

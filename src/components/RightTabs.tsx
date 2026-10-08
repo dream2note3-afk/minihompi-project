@@ -26,7 +26,7 @@ export const RightTabs: React.FC<RightTabsProps> = ({
       id: 'miniroom' as ActiveTab,
       label: '스튜디오 미니룸',
       icon: <Home className="w-3.5 h-3.5 text-[#ff6b2b]" />,
-      subtext: '가구배치·BGM'
+      subtext: '가구·소품배치'
     },
     {
       id: 'guestbook' as ActiveTab,

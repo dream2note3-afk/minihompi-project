@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { MyCdAlbum } from '../types';
+import { MyCdAlbum, CdFilterType } from '../types';
 import {
   saveCdAudioToDB,
   getCdAudioFromDB,
@@ -42,6 +42,7 @@ import {
   Image as ImageIcon,
   Info,
   RotateCw,
+  Repeat,
   FolderOpen,
   Sparkles,
   ExternalLink,
@@ -55,7 +56,13 @@ import {
   Download,
   Cloud,
   RefreshCw,
-  FileUp
+  FileUp,
+  Link,
+  CheckCircle2,
+  FolderPlus,
+  ArrowRight,
+  UploadCloud,
+  Layers
 } from 'lucide-react';
 import {
   cloudSyncLocalAlbumsToCloud,
@@ -69,6 +76,20 @@ interface MyCdCollectionGalleryProps {
   onUpdateAlbum: (id: string, updated: Partial<MyCdAlbum>) => void;
   onDeleteAlbum: (id: string) => void;
   isAdmin?: boolean;
+  // External iTunes sidebar controls
+  searchQuery?: string;
+  onSearchQueryChange?: (q: string) => void;
+  selectedGenre?: string;
+  onSelectedGenreChange?: (genre: string) => void;
+  filterType?: CdFilterType;
+  onFilterTypeChange?: (type: CdFilterType) => void;
+  sortOption?: 'newest' | 'year_desc' | 'year_asc' | 'song_asc' | 'artist_asc' | 'rating' | 'plays';
+  onSortOptionChange?: (sort: 'newest' | 'year_desc' | 'year_asc' | 'song_asc' | 'artist_asc' | 'rating' | 'plays') => void;
+  externalAddModalOpen?: boolean;
+  onExternalAddModalClose?: () => void;
+  externalBackupModalOpen?: boolean;
+  onExternalBackupModalClose?: () => void;
+  shuffleTrigger?: number;
 }
 
 export interface BatchCdUploadItem {
@@ -118,19 +139,65 @@ const GENRE_OPTIONS = [
   '기타'
 ];
 
+const CD_EQ_BARS = [
+  { anim: 'cd-eq-bounce-1', dur: '0.42s', delay: '0.00s', minH: 15 },
+  { anim: 'cd-eq-bounce-2', dur: '0.36s', delay: '0.08s', minH: 22 },
+  { anim: 'cd-eq-bounce-3', dur: '0.50s', delay: '0.15s', minH: 12 },
+  { anim: 'cd-eq-bounce-4', dur: '0.32s', delay: '0.02s', minH: 25 },
+  { anim: 'cd-eq-bounce-1', dur: '0.45s', delay: '0.18s', minH: 18 },
+  { anim: 'cd-eq-bounce-2', dur: '0.38s', delay: '0.05s', minH: 30 },
+  { anim: 'cd-eq-bounce-3', dur: '0.48s', delay: '0.22s', minH: 14 },
+  { anim: 'cd-eq-bounce-4', dur: '0.30s', delay: '0.01s', minH: 24 },
+  { anim: 'cd-eq-bounce-1', dur: '0.40s', delay: '0.12s', minH: 16 },
+  { anim: 'cd-eq-bounce-2', dur: '0.34s', delay: '0.04s', minH: 26 },
+  { anim: 'cd-eq-bounce-3', dur: '0.46s', delay: '0.19s', minH: 14 },
+  { anim: 'cd-eq-bounce-4', dur: '0.33s', delay: '0.03s', minH: 24 },
+  { anim: 'cd-eq-bounce-1', dur: '0.52s', delay: '0.25s', minH: 10 },
+  { anim: 'cd-eq-bounce-2', dur: '0.37s', delay: '0.07s', minH: 28 },
+  { anim: 'cd-eq-bounce-3', dur: '0.44s', delay: '0.14s', minH: 15 },
+  { anim: 'cd-eq-bounce-4', dur: '0.31s', delay: '0.02s', minH: 20 },
+  { anim: 'cd-eq-bounce-1', dur: '0.49s', delay: '0.21s', minH: 12 },
+  { anim: 'cd-eq-bounce-2', dur: '0.39s', delay: '0.10s', minH: 25 }
+];
+
 export const MyCdCollectionGallery: React.FC<MyCdCollectionGalleryProps> = ({
   albums,
   onAddAlbum,
   onAddAlbums,
   onUpdateAlbum,
   onDeleteAlbum,
-  isAdmin = false
+  isAdmin = false,
+  searchQuery: externalSearchQuery,
+  onSearchQueryChange,
+  selectedGenre: externalSelectedGenre,
+  onSelectedGenreChange,
+  filterType: externalFilterType,
+  onFilterTypeChange,
+  sortOption: externalSortOption,
+  onSortOptionChange,
+  externalAddModalOpen = false,
+  onExternalAddModalClose,
+  externalBackupModalOpen = false,
+  onExternalBackupModalClose,
+  shuffleTrigger
 }) => {
-  // Search & Filter
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedGenre, setSelectedGenre] = useState<string>('all');
-  const [filterType, setFilterType] = useState<'all' | 'favorites' | 'five_stars' | 'pinned'>('all');
-  const [sortOption, setSortOption] = useState<'newest' | 'year_desc' | 'year_asc' | 'song_asc' | 'artist_asc' | 'rating' | 'plays'>('newest');
+  // Search & Filter (Internal fallback if not controlled by iTunes sidebar)
+  const [internalSearchQuery, setInternalSearchQuery] = useState('');
+  const [internalSelectedGenre, setInternalSelectedGenre] = useState<string>('all');
+  const [internalFilterType, setInternalFilterType] = useState<CdFilterType>('all');
+  const [internalSortOption, setInternalSortOption] = useState<'newest' | 'year_desc' | 'year_asc' | 'song_asc' | 'artist_asc' | 'rating' | 'plays'>('newest');
+
+  const searchQuery = externalSearchQuery !== undefined ? externalSearchQuery : internalSearchQuery;
+  const setSearchQuery = onSearchQueryChange || setInternalSearchQuery;
+
+  const selectedGenre = externalSelectedGenre !== undefined ? externalSelectedGenre : internalSelectedGenre;
+  const setSelectedGenre = onSelectedGenreChange || setInternalSelectedGenre;
+
+  const filterType = externalFilterType !== undefined ? externalFilterType : internalFilterType;
+  const setFilterType = onFilterTypeChange || setInternalFilterType;
+
+  const sortOption = externalSortOption !== undefined ? externalSortOption : internalSortOption;
+  const setSortOption = (onSortOptionChange as any) || setInternalSortOption;
 
   // Active Playback State
   const [playingAlbumId, setPlayingAlbumId] = useState<string | null>(null);
@@ -139,7 +206,28 @@ export const MyCdCollectionGallery: React.FC<MyCdCollectionGalleryProps> = ({
   const [duration, setDuration] = useState(0);
   const [audioUrlMap, setAudioUrlMap] = useState<Record<string, string>>({});
   const [volume, setVolume] = useState(0.8);
-  const [isLooping, setIsLooping] = useState(false);
+  // Playback Repeat Mode: 'single' (1곡) | 'loop_one' (무한반복) | 'all' (전체재생)
+  const [repeatMode, setRepeatMode] = useState<'single' | 'loop_one' | 'all'>('single');
+  const repeatModeRef = useRef<'single' | 'loop_one' | 'all'>('single');
+  useEffect(() => {
+    repeatModeRef.current = repeatMode;
+  }, [repeatMode]);
+
+  const cycleRepeatMode = () => {
+    setRepeatMode((prev) => {
+      if (prev === 'single') return 'loop_one';
+      if (prev === 'loop_one') return 'all';
+      return 'single';
+    });
+  };
+
+  const playingAlbumIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    playingAlbumIdRef.current = playingAlbumId;
+  }, [playingAlbumId]);
+
+  const filteredAlbumsRef = useRef<MyCdAlbum[]>(albums);
+  const playNextTrackRef = useRef<(id?: string) => void>(() => {});
 
   // Hi-Fi Player In-Banner Lyrics State
   const [showPlayerLyrics, setShowPlayerLyrics] = useState(false);
@@ -248,16 +336,34 @@ export const MyCdCollectionGallery: React.FC<MyCdCollectionGalleryProps> = ({
 
   // Modal State: Add New CD Album (Single & Multi-file Batch)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [batchPendingFiles, setBatchPendingFiles] = useState<BatchCdUploadItem[]>([]);
-  const [isBatchExtracting, setIsBatchExtracting] = useState(false);
-  const [batchExtractProgress, setBatchExtractProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
-  const [isDraggingOverAdd, setIsDraggingOverAdd] = useState(false);
-  const [showDetailedSingleEdit, setShowDetailedSingleEdit] = useState(false);
+  const isAddModalVisible = (externalAddModalOpen ?? false) || isAddModalOpen;
+  const handleCloseAddModal = () => {
+    setIsAddModalOpen(false);
+    onExternalAddModalClose?.();
+  };
+  const [addModalTab, setAddModalTab] = useState<'batch' | 'single'>('batch');
 
-  // File input refs for multi-file triggers (PC / iPad / Smartphone)
-  const addFileInputRef = useRef<HTMLInputElement | null>(null);
-  const addIpadInputRef = useRef<HTMLInputElement | null>(null);
-  const addMoreInputRef = useRef<HTMLInputElement | null>(null);
+  // Drag & Drop onto Window/Gallery State (iTunes Style)
+  const [isWindowDragging, setIsWindowDragging] = useState(false);
+  const dragCounterRef = useRef(0);
+  const multiFileInputRef = useRef<HTMLInputElement | null>(null);
+  const folderInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Batch Extraction & Progress State
+  const [isBatchProcessing, setIsBatchProcessing] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number; currentTitle: string }>({
+    current: 0,
+    total: 0,
+    currentTitle: ''
+  });
+  const [batchResults, setBatchResults] = useState<MyCdAlbum[]>([]);
+  const [isBatchCompleted, setIsBatchCompleted] = useState(false);
+
+  // Quick Link Modal State (수작업 개별 Cloudflare R2 링크 등록용)
+  const [quickLinkModalAlbum, setQuickLinkModalAlbum] = useState<MyCdAlbum | null>(null);
+  const [quickLinkUrl, setQuickLinkUrl] = useState('');
+  const [quickLinkPlaying, setQuickLinkPlaying] = useState(false);
+  const quickLinkAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const [newAudioFile, setNewAudioFile] = useState<File | null>(null);
   const [newAudioUrl, setNewAudioUrl] = useState('');
@@ -308,6 +414,19 @@ export const MyCdCollectionGallery: React.FC<MyCdCollectionGalleryProps> = ({
 
   // Backup & Multi-device Cloud Sync State
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
+  const isBackupModalVisible = (externalBackupModalOpen ?? false) || isBackupModalOpen;
+  const handleCloseBackupModal = () => {
+    setIsBackupModalOpen(false);
+    onExternalBackupModalClose?.();
+  };
+
+  // External Shuffle trigger from iTunes sidebar
+  useEffect(() => {
+    if (shuffleTrigger && shuffleTrigger > 0 && albums.length > 0) {
+      const randIdx = Math.floor(Math.random() * albums.length);
+      handlePlayAlbum(albums[randIdx]);
+    }
+  }, [shuffleTrigger]);
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
   const [syncToast, setSyncToast] = useState('');
   const [backupInputText, setBackupInputText] = useState('');
@@ -466,6 +585,7 @@ export const MyCdCollectionGallery: React.FC<MyCdCollectionGalleryProps> = ({
     }
     const audio = audioRef.current;
     audio.volume = volume;
+    audio.loop = false;
 
     const handleTimeUpdate = () => {
       setCurrentTime(audio.currentTime);
@@ -473,9 +593,12 @@ export const MyCdCollectionGallery: React.FC<MyCdCollectionGalleryProps> = ({
     };
 
     const handleEnded = () => {
-      if (isLooping) {
+      const mode = repeatModeRef.current;
+      if (mode === 'loop_one') {
         audio.currentTime = 0;
         audio.play().catch(console.warn);
+      } else if (mode === 'all') {
+        playNextTrackRef.current();
       } else {
         setIsPlaying(false);
       }
@@ -487,14 +610,17 @@ export const MyCdCollectionGallery: React.FC<MyCdCollectionGalleryProps> = ({
     };
 
     const handleStopAll = () => {
-      if (audioRef.current && !audioRef.current.paused) {
+      if (audioRef.current) {
         audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current.src = '';
       }
       if (synthPlaybackRef.current) {
         synthPlaybackRef.current.stop();
         synthPlaybackRef.current = null;
       }
       setIsPlaying(false);
+      setPlayingAlbumId(null);
     };
 
     audio.addEventListener('timeupdate', handleTimeUpdate);
@@ -507,19 +633,25 @@ export const MyCdCollectionGallery: React.FC<MyCdCollectionGalleryProps> = ({
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('error', handleError);
       window.removeEventListener('app-audio-stop-all', handleStopAll);
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+        audio.src = '';
+      } catch {}
       if (synthPlaybackRef.current) {
         synthPlaybackRef.current.stop();
         synthPlaybackRef.current = null;
       }
+      setIsPlaying(false);
     };
-  }, [isLooping, volume]);
+  }, [volume]);
 
-  const handlePlayAlbum = async (album: MyCdAlbum) => {
+  const handlePlayAlbum = async (album: MyCdAlbum, forcePlay = false) => {
     // 0. Synchronously unlock and resume Web Audio API AudioContext during click gesture
     unlockAudioContext();
 
     // 1. If currently playing this same album, pause it
-    if (playingAlbumId === album.id && isPlaying) {
+    if (!forcePlay && playingAlbumId === album.id && isPlaying) {
       if (audioRef.current && !audioRef.current.paused) {
         audioRef.current.pause();
       }
@@ -601,8 +733,11 @@ export const MyCdCollectionGallery: React.FC<MyCdCollectionGalleryProps> = ({
         setDuration(total);
       },
       () => {
-        if (isLooping) {
-          handlePlayAlbum(album);
+        const mode = repeatModeRef.current;
+        if (mode === 'loop_one') {
+          handlePlayAlbum(album, true);
+        } else if (mode === 'all') {
+          playNextTrackRef.current(album.id);
         } else {
           setIsPlaying(false);
           synthPlaybackRef.current = null;
@@ -614,6 +749,30 @@ export const MyCdCollectionGallery: React.FC<MyCdCollectionGalleryProps> = ({
     setIsPlaying(true);
     onUpdateAlbum(album.id, { playCount: (album.playCount || 0) + 1 });
   };
+
+  const playNextTrack = (currentId?: string) => {
+    const list = filteredAlbumsRef.current.length > 0 ? filteredAlbumsRef.current : albums;
+    if (!list || list.length === 0) {
+      setIsPlaying(false);
+      return;
+    }
+    const targetId = currentId || playingAlbumIdRef.current;
+    const currentIndex = list.findIndex((a) => a.id === targetId);
+    let nextIndex = 0;
+    if (currentIndex !== -1) {
+      nextIndex = (currentIndex + 1) % list.length;
+    }
+    const nextAlbum = list[nextIndex];
+    if (nextAlbum) {
+      handlePlayAlbum(nextAlbum, true);
+    } else {
+      setIsPlaying(false);
+    }
+  };
+
+  useEffect(() => {
+    playNextTrackRef.current = playNextTrack;
+  });
 
   const handlePausePlayback = () => {
     audioRef.current?.pause();
@@ -940,7 +1099,7 @@ And kneel and say an Ave there for me.`);
 
     setIsSubmitting(false);
     setShowDuplicateConfirmModal(false);
-    setIsAddModalOpen(false);
+    handleCloseAddModal();
     setNewKoreanLyrics('');
     setNewAudioUrl('');
 
@@ -1009,6 +1168,8 @@ And kneel and say an Ave there for me.`);
       result = result.filter((a) => a.rating >= 5);
     } else if (filterType === 'pinned') {
       result = result.filter((a) => a.pinned);
+    } else if (filterType === 'unlinked') {
+      result = result.filter((a) => !a.audioUrl || a.audioUrl.trim() === '');
     }
 
     // Sort
@@ -1038,6 +1199,335 @@ And kneel and say an Ave there for me.`);
     return result;
   }, [albums, searchQuery, selectedGenre, filterType, sortOption]);
 
+  useEffect(() => {
+    filteredAlbumsRef.current = filteredAlbums;
+  }, [filteredAlbums]);
+
+  // Unlinked albums count & list for easy sequential manual link registration
+  const unlinkedAlbums = useMemo(() => albums.filter((a) => !a.audioUrl || a.audioUrl.trim() === ''), [albums]);
+
+  // Helper: Extract audio files from DataTransfer (supports multi-selection files and folder hierarchy)
+  const extractFilesFromDataTransfer = async (dataTransfer: DataTransfer): Promise<File[]> => {
+    const result: File[] = [];
+    const isAudio = (f: File) => {
+      const ext = f.name.split('.').pop()?.toLowerCase() || '';
+      return (
+        (f.type.startsWith('audio/') || ['mp3', 'm4a', 'flac', 'wav', 'aac', 'ogg', 'wma', 'aiff', 'alac'].includes(ext)) &&
+        !f.name.startsWith('._')
+      );
+    };
+
+    const items = dataTransfer.items;
+    if (items && items.length > 0 && typeof (items[0] as any).webkitGetAsEntry === 'function') {
+      const queue: any[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const entry = (items[i] as any).webkitGetAsEntry?.();
+        if (entry) queue.push(entry);
+      }
+
+      const traverse = async (entry: any): Promise<void> => {
+        if (entry.isFile) {
+          await new Promise<void>((resolve) => {
+            entry.file((file: File) => {
+              if (isAudio(file)) result.push(file);
+              resolve();
+            }, () => resolve());
+          });
+        } else if (entry.isDirectory) {
+          const reader = entry.createReader();
+          const readAllEntries = async (): Promise<any[]> => {
+            const entriesList: any[] = [];
+            const readChunk = async () => {
+              const chunk = await new Promise<any[]>((resolve) => {
+                reader.readEntries((entries: any[]) => resolve(entries || []), () => resolve([]));
+              });
+              if (chunk.length > 0) {
+                entriesList.push(...chunk);
+                await readChunk();
+              }
+            };
+            await readChunk();
+            return entriesList;
+          };
+
+          const entries = await readAllEntries();
+          for (const child of entries) {
+            await traverse(child);
+          }
+        }
+      };
+
+      while (queue.length > 0) {
+        const entry = queue.shift();
+        await traverse(entry);
+      }
+    }
+
+    if (result.length === 0 && dataTransfer.files && dataTransfer.files.length > 0) {
+      for (let i = 0; i < dataTransfer.files.length; i++) {
+        const f = dataTransfer.files[i];
+        if (isAudio(f)) result.push(f);
+      }
+    }
+
+    return result;
+  };
+
+  // Main Batch Processing Engine
+  const processBatchFiles = async (files: File[]) => {
+    if (!isAdmin) {
+      alert('관리자 모드에서만 소장 음반을 일괄 등록하실 수 있습니다.');
+      return;
+    }
+    const audioFiles = files.filter((f) => {
+      const ext = f.name.split('.').pop()?.toLowerCase() || '';
+      return (
+        (f.type.startsWith('audio/') || ['mp3', 'm4a', 'flac', 'wav', 'aac', 'ogg', 'wma', 'aiff', 'alac'].includes(ext)) &&
+        !f.name.startsWith('._')
+      );
+    });
+
+    if (audioFiles.length === 0) {
+      alert('등록 가능한 오디오 파일(MP3, M4A, FLAC 등)을 찾지 못했습니다.');
+      return;
+    }
+
+    // Natural sort by filename (so track order like 01 ..., 02 ... is preserved)
+    audioFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+
+    setIsBatchProcessing(true);
+    setIsBatchCompleted(false);
+    setBatchProgress({ current: 0, total: audioFiles.length, currentTitle: audioFiles[0].name });
+    setBatchResults([]);
+
+    const createdAlbums: MyCdAlbum[] = [];
+    const DEFAULT_COVERS = [
+      'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1511379938547-c1f69419868d?auto=format&fit=crop&w=600&q=80'
+    ];
+
+    const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '.');
+
+    for (let i = 0; i < audioFiles.length; i++) {
+      const file = audioFiles[i];
+      setBatchProgress({ current: i + 1, total: audioFiles.length, currentTitle: file.name });
+
+      try {
+        const meta = await extractAudioFileMetadata(file);
+
+        let finalCover = meta.coverDataUrl;
+        if (finalCover) {
+          try {
+            finalCover = await compressCoverDataUrl(finalCover, 360, 0.8);
+          } catch {
+            // ignore
+          }
+        } else {
+          finalCover = DEFAULT_COVERS[i % DEFAULT_COVERS.length];
+        }
+
+        const songTitle = meta.title || file.name.replace(/\.[^/.]+$/, '').trim();
+        const artist = meta.artist || '미지정 아티스트';
+        const albumTitle = meta.album || (meta.title ? `${meta.title} Single` : '소장 음원 컬렉션');
+        const autoKorean = getKoreanLyricsForSong(songTitle, artist, meta.lyrics);
+
+        const newAlbum: MyCdAlbum = {
+          id: `cd-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 7)}`,
+          songTitle,
+          artist,
+          albumTitle,
+          albumArtist: meta.albumArtist || artist,
+          composer: meta.composer || '',
+          showComposer: false,
+          grouping: '',
+          genre: meta.genre || 'Pop',
+          releaseYear: meta.year || `${new Date().getFullYear()}`,
+          trackNumber: meta.trackNumber || (i + 1),
+          totalTracks: meta.totalTracks || audioFiles.length,
+          discNumber: meta.discNumber || 1,
+          totalDiscs: meta.totalDiscs || 1,
+          isCompilation: false,
+          rating: 5,
+          isFavorite: false,
+          bpm: meta.bpm,
+          playCount: 0,
+          comments: meta.comment || `${file.name} 일괄 자동 등록 (ID3 메타데이터 추출)`,
+          lyrics: meta.lyrics || '',
+          koreanLyrics: autoKorean || '',
+          coverImageUrl: finalCover,
+          audioFileName: file.name,
+          audioUrl: '', // Cloudflare R2 링크는 사용자가 수작업으로 등록하도록 비워둠
+          audioFileSize: meta.fileSizeFormatted || `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+          audioDuration: meta.duration || 177,
+          formattedDuration: meta.formattedDuration || '00:02:57',
+          audioFormat: meta.audioFormat || 'MPEG 오디오 (MP3)',
+          bitrate: meta.bitrate || '192kbps',
+          channels: meta.channels || '2(스테레오)',
+          sampleRate: meta.sampleRate || '44.100kHz',
+          encodedBy: meta.encodedBy || 'iTunes 10.6.3.25',
+          dateAdded: todayStr,
+          pinned: false,
+          likes: 0
+        };
+
+        // Save audio blob in IndexedDB for local play fallback if available
+        try {
+          await saveCdAudioToDB(newAlbum.id, file, file.name);
+          const objUrl = URL.createObjectURL(file);
+          setAudioUrlMap((prev) => ({ ...prev, [newAlbum.id]: objUrl }));
+        } catch {
+          // ignore
+        }
+
+        createdAlbums.push(newAlbum);
+        setBatchResults((prev) => [...prev, newAlbum]);
+      } catch (err) {
+        console.warn(`Error parsing file ${file.name}:`, err);
+      }
+
+      await new Promise((r) => setTimeout(r, 6));
+    }
+
+    if (createdAlbums.length > 0) {
+      if (onAddAlbums) {
+        onAddAlbums(createdAlbums);
+      } else {
+        createdAlbums.forEach((a) => onAddAlbum(a));
+      }
+      setIsBatchCompleted(true);
+    }
+  };
+
+  // Window drag & drop handlers
+  const handleWindowDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current += 1;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsWindowDragging(true);
+    }
+  };
+
+  const handleWindowDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleWindowDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0;
+      setIsWindowDragging(false);
+    }
+  };
+
+  const handleWindowDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
+    setIsWindowDragging(false);
+
+    if (!isAdmin) {
+      alert('관리자 모드에서만 소장 음반을 등록하실 수 있습니다.');
+      return;
+    }
+
+    const files = await extractFilesFromDataTransfer(e.dataTransfer);
+    if (files.length > 0) {
+      processBatchFiles(files);
+    }
+  };
+
+  const handleMultiFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const filesArray = Array.from(e.target.files);
+      processBatchFiles(filesArray);
+    }
+    e.target.value = '';
+  };
+
+  const handleFolderInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const filesArray = Array.from(e.target.files);
+      processBatchFiles(filesArray);
+    }
+    e.target.value = '';
+  };
+
+  // Quick Link Modal Handlers
+  const openQuickLinkModal = (album: MyCdAlbum) => {
+    if (quickLinkAudioRef.current) {
+      quickLinkAudioRef.current.pause();
+      quickLinkAudioRef.current = null;
+    }
+    setQuickLinkPlaying(false);
+    setQuickLinkModalAlbum(album);
+    setQuickLinkUrl(album.audioUrl || '');
+  };
+
+  const handleToggleTestPlay = () => {
+    if (quickLinkPlaying) {
+      if (quickLinkAudioRef.current) {
+        quickLinkAudioRef.current.pause();
+        quickLinkAudioRef.current = null;
+      }
+      setQuickLinkPlaying(false);
+    } else {
+      if (!quickLinkUrl.trim()) return;
+      const testAudio = new Audio(quickLinkUrl.trim());
+      quickLinkAudioRef.current = testAudio;
+      testAudio.play().then(() => {
+        setQuickLinkPlaying(true);
+      }).catch((err) => {
+        console.warn('Playback error:', err);
+        alert('해당 URL로 음원을 재생할 수 없습니다. URL 주소 및 파일 링크를 확인해주세요.');
+      });
+      testAudio.onended = () => setQuickLinkPlaying(false);
+      testAudio.onerror = () => {
+        setQuickLinkPlaying(false);
+        alert('음원 로딩 오류: 올바른 오디오 파일 링크인지 확인해주세요.');
+      };
+    }
+  };
+
+  const handleSaveQuickLink = (andNext: boolean = false) => {
+    if (!quickLinkModalAlbum) return;
+    const url = quickLinkUrl.trim();
+    onUpdateAlbum(quickLinkModalAlbum.id, { audioUrl: url });
+
+    // Sync to central server
+    fetch('/api/albums/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        albums: albums.map((a) => a.id === quickLinkModalAlbum.id ? { ...a, audioUrl: url } : a)
+      })
+    }).catch(() => {});
+
+    if (quickLinkAudioRef.current) {
+      quickLinkAudioRef.current.pause();
+      quickLinkAudioRef.current = null;
+      setQuickLinkPlaying(false);
+    }
+
+    if (andNext) {
+      // Find next unlinked album
+      const remainingUnlinked = albums.filter((a) => (!a.audioUrl || a.audioUrl.trim() === '') && a.id !== quickLinkModalAlbum.id);
+      if (remainingUnlinked.length > 0) {
+        setQuickLinkModalAlbum(remainingUnlinked[0]);
+        setQuickLinkUrl(remainingUnlinked[0].audioUrl || '');
+        return;
+      }
+    }
+    setQuickLinkModalAlbum(null);
+  };
+
   const currentlyPlayingAlbum = albums.find((a) => a.id === playingAlbumId);
 
   const formatSeconds = (sec: number) => {
@@ -1048,7 +1538,51 @@ And kneel and say an Ave there for me.`);
   };
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col gap-2.5 h-full overflow-hidden relative">
+    <div
+      onDragEnter={handleWindowDragEnter}
+      onDragOver={handleWindowDragOver}
+      onDragLeave={handleWindowDragLeave}
+      onDrop={handleWindowDrop}
+      className="flex-1 min-h-0 flex flex-col gap-2.5 h-full overflow-hidden relative"
+    >
+      {/* Hidden Multi-file and Folder input pickers */}
+      <input
+        ref={multiFileInputRef}
+        type="file"
+        multiple
+        accept="audio/*,.mp3,.m4a,.flac,.wav,.aac,.ogg,.wma,.aiff,.alac"
+        onChange={handleMultiFileInputChange}
+        className="hidden"
+      />
+      <input
+        ref={folderInputRef}
+        type="file"
+        multiple
+        {...({ webkitdirectory: '', directory: '' } as any)}
+        onChange={handleFolderInputChange}
+        className="hidden"
+      />
+
+      {/* Fullscreen/Container Drag & Drop Overlay (iTunes Style) */}
+      {isWindowDragging && isAdmin && (
+        <div className="absolute inset-0 z-50 bg-[#1e1b4b]/92 backdrop-blur-md border-4 border-dashed border-[#ff6b2b] rounded-2xl flex flex-col items-center justify-center p-6 text-center text-white pointer-events-none animate-fadeIn shadow-2xl">
+          <div className="w-20 h-20 rounded-full bg-linear-to-tr from-[#ff6b2b] to-[#7c3aed] flex items-center justify-center mb-4 shadow-xl animate-bounce">
+            <Disc3 className="w-10 h-10 text-white animate-spin" style={{ animationDuration: '4s' }} />
+          </div>
+          <h2 className="text-xl sm:text-2xl font-black text-white mb-2 drop-shadow-md">
+            🎵 음원 파일을 여기에 놓으세요! (아이튠즈 방식 일괄 등록)
+          </h2>
+          <p className="text-sm text-purple-200 font-medium max-w-lg mb-3 leading-relaxed">
+            50~100곡의 다중 음원 파일(MP3, M4A, FLAC 등) 또는 상위 폴더를 드래그하여 놓으시면,<br />
+            ID3 메타데이터(곡명, 가수, 앨범, 트랙, 장르, 연도, 가사, 앨범커버)를 자동 추출하여 즉시 라이브러리에 등록합니다.
+          </p>
+          <div className="inline-flex items-center gap-1.5 bg-black/45 border border-white/20 px-3.5 py-1.5 rounded-full text-xs text-amber-300 font-mono shadow-inner">
+            <Radio className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span>💡 Cloudflare R2 스트리밍 재생 링크는 등록 완료 후 개별 수작업으로 등록하실 수 있습니다.</span>
+          </div>
+        </div>
+      )}
+
       {/* Floating On-Screen Volume HUD (키보드 좌/우 방향키 & 마우스 휠 조절 시 피드백 표시) */}
       {showVolumeToast && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[#1e1b4b]/95 backdrop-blur-md text-white px-4 py-2 rounded-full shadow-2xl flex items-center gap-2.5 text-xs font-mono font-bold border border-purple-400/50 animate-fadeIn pointer-events-none select-none">
@@ -1070,51 +1604,6 @@ And kneel and say an Ave there for me.`);
         </div>
       )}
 
-      {/* Header Banner */}
-      <div className="bg-linear-to-r from-[#2e1065] via-[#4c1d95] to-[#5b21b6] text-white rounded-xl p-3.5 sm:p-4 shadow-sm border border-[#6d28d9] flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
-        <div className="flex items-start sm:items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-white/10 backdrop-blur-xs border border-white/20 flex items-center justify-center shrink-0 shadow-inner">
-            <Disc3 className="w-6 h-6 text-[#c4b5fd] animate-spin" style={{ animationDuration: isPlaying ? '3s' : '12s' }} />
-          </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-base sm:text-lg font-bold tracking-tight flex items-center gap-1.5">
-                <span>소장 CD / 음원 아카이브</span>
-                <span className="text-[11px] font-normal px-2 py-0.5 rounded-full bg-white/20 border border-white/30">
-                  약 4만곡 · 2,500 앨범
-                </span>
-              </h2>
-            </div>
-            <p className="text-xs text-purple-200 mt-0.5 leading-relaxed">
-              현재 소장하고 있는 약 4만곡의 음원(약 2,500 앨범)중, 앨범별 주요곡  설명 및 재생/감상
-            </p>
-          </div>
-        </div>
-
-        {isAdmin && (
-          <div className="flex items-center gap-2 self-end md:self-auto shrink-0 flex-wrap">
-            <button
-              type="button"
-              onClick={() => setIsBackupModalOpen(true)}
-              className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 border border-white/30 transition-all cursor-pointer shadow-xs"
-              title="앨범 목록 백업 및 복원"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>소장 음반 백업/복원</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsAddModalOpen(true)}
-              className="px-3.5 py-2 bg-[#ff6b2b] hover:bg-[#ea580c] text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
-            >
-              <Plus className="w-4 h-4 stroke-[3]" />
-              <span>새 소장 CD/음원 등록</span>
-            </button>
-          </div>
-        )}
-      </div>
-
       {syncToast && (
         <div className="p-3 bg-indigo-50 border border-indigo-200 text-indigo-900 rounded-xl text-xs flex items-center justify-between gap-2 shadow-xs animate-fadeIn">
           <div className="flex items-center gap-2">
@@ -1131,12 +1620,51 @@ And kneel and say an Ave there for me.`);
         </div>
       )}
 
+      {/* Cloudflare R2 재생 링크 미등록 안내 배너 */}
+      {unlinkedAlbums.length > 0 && (
+        <div className="bg-amber-50/95 border border-amber-300 text-amber-950 px-3 py-2 rounded-xl text-xs flex flex-wrap items-center justify-between gap-2 shadow-xs animate-fadeIn shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <Radio className="w-4 h-4 text-amber-600 shrink-0 animate-pulse" />
+            <div className="min-w-0">
+              <span className="font-bold text-amber-900">
+                Cloudflare R2 스트리밍 링크 미등록 ({unlinkedAlbums.length}곡):
+              </span>{' '}
+              <span className="text-amber-800 text-[11px]">
+                일괄 등록된 음원의 실제 재생 링크를 수작업으로 개별 등록해주세요.
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            {filterType !== 'unlinked' && (
+              <button
+                type="button"
+                onClick={() => setFilterType('unlinked')}
+                className="px-2 py-1 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-md font-bold text-[11px] transition-colors cursor-pointer"
+              >
+                미등록 곡만 보기 ({unlinkedAlbums.length})
+              </button>
+            )}
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => openQuickLinkModal(unlinkedAlbums[0])}
+                className="px-2.5 py-1 bg-[#ea580c] hover:bg-[#c2410c] text-white rounded-md font-bold text-[11px] flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
+              >
+                <Link className="w-3 h-3" />
+                <span>순차적으로 링크 등록하기 ➔</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Hi-Fi CD Player Banner (When Playing or Selected) */}
       {/* Floating Active Audio Player Bar (Slim Single-Row Compact Design) */}
       {currentlyPlayingAlbum && (
         <div
           onWheel={handleWheelVolume}
-          className="bg-[#1e1b4b] border-2 border-[#7c3aed] text-white rounded-xl px-2.5 py-1.5 sm:py-2 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2 animate-fadeIn relative overflow-hidden shrink-0"
+          className="bg-[#1e1b4b] border-2 border-[#7c3aed] text-white rounded-xl px-2.5 py-1 sm:py-1.5 mb-1 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-2 animate-fadeIn relative overflow-hidden shrink-0"
           title="재생 바 위에서 마우스 휠을 굴리거나, 키보드 좌/우(◀/▶) 방향키를 누르면 볼륨이 조절됩니다."
         >
           {/* Ambient Glow */}
@@ -1182,18 +1710,92 @@ And kneel and say an Ave there for me.`);
             </div>
           </div>
 
+          {/* Center: Dynamic Hi-Fi Stereo Graphic Equalizer (사용자가 요청한 붉은색 동그라미 위치) */}
+          <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1 bg-black/45 border border-purple-500/40 rounded-lg shadow-inner z-10 shrink-0 select-none mx-auto sm:mx-0">
+            {/* Left Channel Indicator */}
+            <div className="flex flex-col items-center justify-center leading-none text-[8px] font-mono text-purple-300 mr-0.5">
+              <span className="font-bold text-[#ff9f43]">EQ</span>
+              <span className="text-[7px] text-purple-400">STEREO</span>
+            </div>
+
+            {/* 18-Band Animated Frequency Bars */}
+            <div className="flex items-end gap-0.5 h-6 sm:h-6.5 w-28 sm:w-36 md:w-44 px-1 py-0.5 bg-black/60 rounded border border-purple-900/60 shadow-inner">
+              {CD_EQ_BARS.map((bar, idx) => (
+                <div
+                  key={idx}
+                  className="flex-1 h-full flex items-end justify-center"
+                >
+                  <div
+                    className={`w-full max-w-[5px] rounded-xs transition-all duration-150 ${
+                      isPlaying
+                        ? 'bg-gradient-to-t from-emerald-400 via-amber-300 to-rose-500 shadow-[0_0_4px_rgba(255,107,43,0.35)]'
+                        : 'bg-purple-900/40'
+                    }`}
+                    style={{
+                      height: isPlaying ? undefined : `${bar.minH}%`,
+                      animation: isPlaying
+                        ? `${bar.anim} ${bar.dur} ease-in-out infinite alternate ${bar.delay}`
+                        : 'none'
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Right Status Indicator */}
+            <div className="flex flex-col items-center justify-center leading-none text-[8px] font-mono text-purple-300 ml-0.5">
+              <span className={`font-bold transition-colors ${isPlaying ? 'text-emerald-400 animate-pulse' : 'text-purple-500'}`}>
+                {isPlaying ? 'LIVE' : 'OFF'}
+              </span>
+              <span className="text-[7px] text-purple-400">Hi-Fi</span>
+            </div>
+          </div>
+
           {/* Right: Controls, Seek Bar & Volume Bar in a Compact Row */}
           <div className="flex items-center gap-2 z-10 shrink-0 justify-between sm:justify-end">
-            <div className="flex items-center gap-1 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0">
+              {/* 3단 토글 메뉴: 1곡 / 무한반복 / 전체재생 */}
               <button
                 type="button"
-                onClick={() => setIsLooping(!isLooping)}
-                className={`p-1 rounded text-xs transition-colors cursor-pointer ${
-                  isLooping ? 'bg-purple-600 text-white' : 'text-purple-300 hover:text-white'
+                onClick={cycleRepeatMode}
+                className={`px-2 py-1 rounded-md text-[10px] sm:text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer border select-none shrink-0 ${
+                  repeatMode === 'loop_one'
+                    ? 'bg-[#ff6b2b] text-white border-[#ff9f43] shadow-[0_0_8px_rgba(255,107,43,0.45)] ring-1 ring-white/50'
+                    : repeatMode === 'all'
+                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.45)] ring-1 ring-white/50'
+                    : 'bg-purple-950/70 hover:bg-purple-900/90 text-purple-200 hover:text-white border-purple-500/30'
                 }`}
-                title={isLooping ? '한 곡 반복 켜짐' : '반복 끔'}
+                title={
+                  repeatMode === 'single'
+                    ? '1곡 재생 중 (곡 끝나면 정지 | 클릭 시 [무한반복]으로 전환)'
+                    : repeatMode === 'loop_one'
+                    ? '한곡 무한반복 중 (현재 곡 계속 반복 | 클릭 시 [전체재생]으로 전환)'
+                    : '전체재생 중 (리스트 다음 곡 자동 연속재생 | 클릭 시 [1곡]으로 전환)'
+                }
               >
-                <RotateCw className="w-3.5 h-3.5" />
+                {repeatMode === 'loop_one' && (
+                  <RotateCw className="w-3 h-3 animate-spin [animation-duration:3s] text-white" />
+                )}
+                {repeatMode === 'all' && (
+                  <ListMusic className="w-3 h-3 text-white" />
+                )}
+                {repeatMode === 'single' && (
+                  <Disc className="w-3 h-3 text-purple-300" />
+                )}
+                <span>
+                  {repeatMode === 'single' ? '1곡' : repeatMode === 'loop_one' ? '무한반복' : '전체재생'}
+                </span>
+                <span
+                  className={`text-[8px] px-1 py-0.2 rounded font-black tracking-tight leading-none ${
+                    repeatMode === 'loop_one'
+                      ? 'bg-yellow-300 text-black'
+                      : repeatMode === 'all'
+                      ? 'bg-emerald-200 text-emerald-950'
+                      : 'bg-purple-900/80 text-purple-300'
+                  }`}
+                >
+                  {repeatMode === 'single' ? '1곡' : repeatMode === 'loop_one' ? '반복' : '전체'}
+                </span>
               </button>
 
               <button
@@ -1268,113 +1870,45 @@ And kneel and say an Ave there for me.`);
         </div>
       )}
 
-      {/* Filter and Search Bar */}
-      <div className="bg-white border border-[#cddfe7] rounded-xl p-2 sm:p-2.5 shadow-2xs flex flex-col gap-2">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          {/* Search Input */}
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-[#8fa4b3] absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="노래 제목, 아티스트, 앨범명, 작곡가, 주석 검색..."
-              className="w-full pl-9 pr-8 py-1.5 bg-[#f8fafc] border border-[#cbd5e1] rounded-lg text-xs text-[#1e293b] outline-hidden focus:border-[#7c3aed] focus:bg-white transition-all"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
+      {/* Top Quick Bar: Bulk File Import Actions & Counter */}
+      {isAdmin && (
+        <div className="flex items-center justify-between gap-2 px-1 py-0.5 text-xs text-[#475569] shrink-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[11px] font-bold text-[#1e293b] flex items-center gap-1">
+              <Disc3 className="w-3.5 h-3.5 text-[#7c3aed]" />
+              <span>소장 라이브러리 ({filteredAlbums.length}곡)</span>
+            </span>
+            {unlinkedAlbums.length > 0 && (
+              <span className="text-[10px] bg-amber-100 text-amber-900 font-bold px-1.5 py-0.5 rounded border border-amber-200">
+                R2 미등록: {unlinkedAlbums.length}곡
+              </span>
             )}
           </div>
 
-          {/* Sort Selection */}
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs text-[#64748b] font-medium hidden sm:inline">정렬:</span>
-            <select
-              value={sortOption}
-              onChange={(e) => setSortOption(e.target.value as any)}
-              className="py-1.5 px-2.5 bg-white border border-[#cbd5e1] rounded-lg text-xs text-[#334155] outline-hidden focus:border-[#7c3aed] cursor-pointer"
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => multiFileInputRef.current?.click()}
+              className="px-2.5 py-1 bg-white hover:bg-gray-50 text-[#7c3aed] border border-[#d8b4fe] rounded-lg font-bold text-[11px] flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+              title="50~100곡의 오디오 파일을 한 번에 선택하여 일괄 등록"
             >
-              <option value="newest">최신 등록순</option>
-              <option value="year_desc">발매연도순 (최신순)</option>
-              <option value="year_asc">발매연도순 (오래된순)</option>
-              <option value="song_asc">노래 제목순 (가나다)</option>
-              <option value="artist_asc">아티스트순 (가나다)</option>
-              <option value="rating">별점 선호도순</option>
-              <option value="plays">재생 횟수순</option>
-            </select>
+              <UploadCloud className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">다중 음원 일괄 등록 (50~100곡)</span>
+              <span className="sm:hidden">다중 등록</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => folderInputRef.current?.click()}
+              className="px-2.5 py-1 bg-white hover:bg-gray-50 text-[#475569] border border-[#cbd5e1] rounded-lg font-bold text-[11px] flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+              title="음원이 담긴 상위 폴더를 통째로 선택하여 일괄 등록"
+            >
+              <FolderPlus className="w-3.5 h-3.5 text-[#0284c7]" />
+              <span className="hidden sm:inline">상위 폴더 등록</span>
+              <span className="sm:hidden">폴더</span>
+            </button>
           </div>
         </div>
-
-        {/* Filter Badges & Genre Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-1 text-xs border-t border-[#f1f5f9]">
-          <button
-            type="button"
-            onClick={() => {
-              setFilterType('all');
-              setSelectedGenre('all');
-            }}
-            className={`px-3 py-1 rounded-full font-medium shrink-0 transition-colors cursor-pointer ${
-              filterType === 'all' && selectedGenre === 'all'
-                ? 'bg-[#7c3aed] text-white font-bold shadow-2xs'
-                : 'bg-[#f1f5f9] text-[#475569] hover:bg-[#e2e8f0]'
-            }`}
-          >
-            전체 ({albums.length})
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setFilterType('five_stars')}
-            className={`px-3 py-1 rounded-full font-medium shrink-0 flex items-center gap-1 transition-colors cursor-pointer ${
-              filterType === 'five_stars'
-                ? 'bg-[#eab308] text-white font-bold shadow-2xs'
-                : 'bg-[#fef9c3] text-[#854d0e] hover:bg-[#fef08a]'
-            }`}
-          >
-            <Star className="w-3 h-3 fill-current" />
-            <span>5성급 명반</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setFilterType('favorites')}
-            className={`px-3 py-1 rounded-full font-medium shrink-0 flex items-center gap-1 transition-colors cursor-pointer ${
-              filterType === 'favorites'
-                ? 'bg-[#e11d48] text-white font-bold shadow-2xs'
-                : 'bg-[#ffe4e6] text-[#9f1239] hover:bg-[#fecdd3]'
-            }`}
-          >
-            <Heart className="w-3 h-3 fill-current" />
-            <span>즐겨찾기</span>
-          </button>
-
-          <div className="w-px h-4 bg-[#cbd5e1] shrink-0 mx-1" />
-
-          {GENRE_OPTIONS.slice(0, 7).map((genre) => (
-            <button
-              key={genre}
-              type="button"
-              onClick={() => {
-                setSelectedGenre(selectedGenre === genre ? 'all' : genre);
-                setFilterType('all');
-              }}
-              className={`px-2.5 py-1 rounded-full font-medium shrink-0 transition-colors cursor-pointer ${
-                selectedGenre === genre
-                  ? 'bg-[#4f46e5] text-white font-bold shadow-2xs'
-                  : 'bg-[#e0e7ff] text-[#3730a3] hover:bg-[#c7d2fe]'
-              }`}
-            >
-              {genre}
-            </button>
-          ))}
-        </div>
-      </div>
+      )}
 
       {/* Album Cards Grid (Dedicated Red-box scrollable container) */}
       <div className="flex-1 min-h-0 overflow-y-auto custom-retro-scrollbar pr-1">
@@ -1403,122 +1937,148 @@ And kneel and say an Ave there for me.`);
             return (
               <div
                 key={album.id}
-                className={`bg-white rounded-xl border transition-all duration-200 overflow-hidden flex flex-col shadow-2xs hover:shadow-md ${
+                className={`relative aspect-square rounded-xl border transition-all duration-300 overflow-hidden group select-none shadow-xs hover:shadow-lg ${
                   isThisPlaying
-                    ? 'border-[#7c3aed] ring-2 ring-[#7c3aed]/20'
-                    : 'border-[#cbd5e1] hover:border-[#94a3b8]'
+                    ? 'border-[#ff6b2b] ring-3 ring-[#ff6b2b]/35 shadow-purple-500/20'
+                    : 'border-[#cbd5e1] hover:border-[#7c3aed]'
                 }`}
               >
-                {/* CD Jewel Case Cover & Spin Section */}
-                <div className="relative aspect-square bg-[#0f172a] overflow-hidden group select-none">
-                  {/* Album Cover Artwork */}
-                  <img
-                    src={album.coverImageUrl || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=600&q=80'}
-                    alt={album.albumTitle}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
+                {/* 1. Full Album Cover Artwork */}
+                <img
+                  src={album.coverImageUrl || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=600&q=80'}
+                  alt={album.albumTitle}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                />
 
-                  {/* CD Disc Visual Peeking Out */}
-                  <div
-                    className={`absolute -right-8 top-1/2 -translate-y-1/2 w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-white/40 shadow-xl transition-transform duration-500 pointer-events-none ${
-                      isThisPlaying
-                        ? 'translate-x-0 animate-spin'
-                        : 'group-hover:-translate-x-2'
-                    }`}
-                    style={{
-                      background: 'radial-gradient(circle, #334155 0%, #0f172a 60%, #475569 100%)',
-                      animationDuration: '3s'
-                    }}
-                  >
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-6 h-6 rounded-full border border-white/60 bg-purple-900/80 flex items-center justify-center">
-                        <div className="w-2 h-2 rounded-full bg-white" />
-                      </div>
+                {/* 2. CD Disc Visual Peeking Out (Iconic vinyl/CD jewel case) */}
+                <div
+                  className={`absolute -right-8 top-1/2 -translate-y-1/2 w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-white/40 shadow-2xl transition-transform duration-500 pointer-events-none ${
+                    isThisPlaying
+                      ? 'translate-x-0 animate-spin'
+                      : 'group-hover:-translate-x-2'
+                  }`}
+                  style={{
+                    background: 'radial-gradient(circle, #334155 0%, #0f172a 60%, #475569 100%)',
+                    animationDuration: '3s'
+                  }}
+                >
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-6 h-6 rounded-full border border-white/60 bg-purple-900/80 flex items-center justify-center">
+                      <div className="w-2 h-2 rounded-full bg-white" />
                     </div>
                   </div>
+                </div>
 
-                  {/* Top Badges */}
-                  <div className="absolute top-1.5 left-1.5 flex items-center gap-1 z-10">
-                    <span className="bg-black/75 backdrop-blur-xs text-white text-[9px] font-bold px-1.5 py-0.2 rounded border border-white/20">
+                {/* 3. Top Header Inside Cover: Genre, Year & Favorite / Pinned / R2 Badges */}
+                <div className="absolute top-1.5 left-1.5 right-1.5 flex items-center justify-between z-20 pointer-events-none">
+                  {/* Left: Genre + Year + R2 Status */}
+                  <div className="flex items-center gap-1 pointer-events-auto">
+                    <span className="bg-black/75 backdrop-blur-xs text-white text-[9px] font-bold px-1.5 py-0.5 rounded border border-white/20 shadow-xs">
                       {album.genre}
                     </span>
-                    <span className="bg-black/75 backdrop-blur-xs text-[#fde047] text-[9px] font-bold px-1 py-0.2 rounded border border-white/20">
+                    <span className="bg-black/75 backdrop-blur-xs text-[#fde047] text-[9px] font-bold px-1 py-0.5 rounded border border-white/20 shadow-xs">
                       {album.releaseYear}
                     </span>
+                    {album.pinned && (
+                      <span className="bg-[#ff6b2b]/90 backdrop-blur-xs text-white text-[9px] font-bold px-1.5 py-0.5 rounded border border-white/20 shadow-xs flex items-center gap-0.5" title="대표작 음반">
+                        <Pin className="w-2.5 h-2.5 fill-current" />
+                      </span>
+                    )}
+                    {album.audioUrl ? (
+                      <span className="bg-emerald-950/85 backdrop-blur-xs text-emerald-300 text-[8px] font-bold px-1 py-0.5 rounded border border-emerald-500/40 shadow-xs flex items-center gap-0.5" title="Cloudflare R2 스트리밍 연결됨">
+                        <Check className="w-2.5 h-2.5 text-emerald-400" />
+                        <span>R2</span>
+                      </span>
+                    ) : (
+                      <span className="bg-amber-950/85 backdrop-blur-xs text-amber-300 text-[8px] font-bold px-1 py-0.5 rounded border border-amber-500/40 shadow-xs flex items-center gap-0.5" title="Cloudflare R2 링크 미등록 (수작업 등록 대기)">
+                        <Radio className="w-2.5 h-2.5 text-amber-400" />
+                        <span>미등록</span>
+                      </span>
+                    )}
                   </div>
 
-                  {/* Top Right Favorite / Rating */}
-                  <div className="absolute top-1.5 right-1.5 flex items-center gap-1 z-10">
+                  {/* Right: Favorite Heart Button */}
+                  <div className="flex items-center gap-1 pointer-events-auto">
                     <button
                       type="button"
-                      onClick={() => onUpdateAlbum(album.id, { isFavorite: !album.isFavorite })}
-                      className={`p-1 rounded-full backdrop-blur-xs transition-colors cursor-pointer ${
-                        album.isFavorite ? 'bg-red-600/90 text-white' : 'bg-black/40 text-white hover:text-red-400'
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onUpdateAlbum(album.id, { isFavorite: !album.isFavorite });
+                      }}
+                      className={`p-1 rounded-full backdrop-blur-xs transition-colors cursor-pointer border border-white/20 shadow-xs ${
+                        album.isFavorite ? 'bg-red-600/90 text-white' : 'bg-black/50 text-white/80 hover:text-red-400'
                       }`}
                       title={album.isFavorite ? '즐겨찾기 해제' : '즐겨찾기 추가'}
                     >
                       <Heart className="w-3 h-3 fill-current" />
                     </button>
                   </div>
-
-                  {/* Bottom Overlay with Play Button */}
-                  <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent flex items-end p-2 sm:p-2.5">
-                    <div className="flex items-center justify-between w-full">
-                      <div className="text-white min-w-0 pr-1.5">
-                        <span className="text-[9px] text-purple-300 font-mono block">
-                          Tr. {album.trackNumber || 1} / {album.totalTracks || 15}
-                        </span>
-                        <h4 className="text-xs font-bold text-white truncate drop-shadow-sm">
-                          {album.songTitle}
-                        </h4>
-                      </div>
-
-                      {/* Play Button */}
-                      <button
-                        type="button"
-                        onClick={() => handlePlayAlbum(album)}
-                        className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shadow-lg transition-transform active:scale-90 cursor-pointer shrink-0 ${
-                          isThisPlaying
-                            ? 'bg-[#ff6b2b] text-white'
-                            : 'bg-white text-[#7c3aed] hover:bg-[#ff6b2b] hover:text-white'
-                        }`}
-                        title={isThisPlaying ? '일시정지' : '음원 재생'}
-                      >
-                        {isThisPlaying ? (
-                          <Pause className="w-3.5 h-3.5 fill-current" />
-                        ) : (
-                          <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
                 </div>
 
-                {/* Album Details Body - Ultra-compact for iPad 2-row view */}
-                <div className="p-2 sm:p-2.5 flex flex-col justify-between gap-1 bg-white flex-1">
-                  <div>
-                    <h4
-                      className="text-xs sm:text-[13px] font-bold text-[#0f172a] hover:text-[#7c3aed] transition-colors truncate cursor-pointer leading-snug"
-                      onClick={() => handleOpenInfoModal(album, 'details')}
-                      title={album.songTitle}
+                {/* 4. Complete Details Moved Inside Album Cover ("동그라미 내용을 앨범 표지 내부로 이동") */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/75 via-45% to-transparent flex flex-col justify-end px-1.5 py-1.5 sm:px-2 sm:py-2 z-10 transition-all">
+                  {/* Row 1: Track Number, Song Title & Play/Pause Button */}
+                  <div className="flex items-center justify-between gap-1.5 mb-0.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1 leading-none mb-0.5">
+                        <span className="text-[9px] text-purple-300 font-mono">
+                          Tr.{album.trackNumber || 1}
+                        </span>
+                        {isThisPlaying && (
+                          <span className="text-[8px] bg-emerald-500 text-white font-bold px-1 py-0.2 rounded animate-pulse">
+                            PLAYING
+                          </span>
+                        )}
+                      </div>
+                      <h4
+                        className="text-xs sm:text-[13px] font-bold text-white hover:text-[#ff9f43] transition-colors truncate drop-shadow-sm cursor-pointer leading-tight"
+                        onClick={() => handleOpenInfoModal(album, 'details')}
+                        title={album.songTitle}
+                      >
+                        {album.songTitle}
+                      </h4>
+                    </div>
+
+                    {/* Play / Pause Button */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePlayAlbum(album);
+                      }}
+                      className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shadow-lg transition-transform active:scale-90 cursor-pointer shrink-0 ${
+                        isThisPlaying
+                          ? 'bg-[#ff6b2b] text-white ring-2 ring-white/60 animate-pulse'
+                          : 'bg-white text-[#7c3aed] hover:bg-[#ff6b2b] hover:text-white'
+                      }`}
+                      title={isThisPlaying ? '일시정지' : '음원 재생'}
                     >
-                      {album.songTitle}
-                    </h4>
-                    <p className="text-[11px] text-[#475569] truncate leading-tight mt-0.5">
-                      <span className="font-medium">{album.artist}</span>
-                      {album.albumTitle && (
-                        <span className="text-[#8e9aa8] ml-1">· {album.albumTitle}</span>
+                      {isThisPlaying ? (
+                        <Pause className="w-3.5 h-3.5 fill-current" />
+                      ) : (
+                        <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
                       )}
-                    </p>
+                    </button>
                   </div>
 
-                  {/* Bottom Single Line: "곡정보 가사 5회" + Admin controls */}
-                  <div className="flex items-center justify-between pt-1 border-t border-[#f1f5f9] text-[11px] gap-1 mt-0.5">
-                    <div className="flex items-center gap-1.5 shrink-0 flex-nowrap">
+                  {/* Row 2: Artist & Album Title */}
+                  <p className="text-[10px] sm:text-[11px] text-purple-200/90 truncate leading-tight mb-1">
+                    <span className="font-semibold text-white/95">{album.artist}</span>
+                    {album.albumTitle && (
+                      <span className="text-white/60 ml-1">· {album.albumTitle}</span>
+                    )}
+                  </p>
+
+                  {/* Row 3: Action Buttons (곡정보, 가사, 횟수, 관리자 핀/수정/삭제) */}
+                  <div className="flex items-center justify-between gap-0.5 pt-1 border-t border-white/20 text-[9px] sm:text-[10px]">
+                    <div className="flex items-center gap-0.5 shrink-0 flex-nowrap">
                       <button
                         type="button"
-                        onClick={() => handleOpenInfoModal(album, 'details')}
-                        className="px-1.5 py-0.5 bg-[#f8fafc] hover:bg-[#ede9fe] text-[#7c3aed] border border-[#e2e8f0] rounded font-semibold text-[10px] sm:text-[11px] whitespace-nowrap transition-colors cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenInfoModal(album, 'details');
+                        }}
+                        className="px-1 py-0.5 bg-white/20 hover:bg-white/35 text-white border border-white/25 rounded font-medium text-[8.5px] sm:text-[9.5px] whitespace-nowrap transition-colors cursor-pointer backdrop-blur-xs"
                         title="곡 정보 세부사항"
                       >
                         곡정보
@@ -1526,16 +2086,35 @@ And kneel and say an Ave there for me.`);
 
                       <button
                         type="button"
-                        onClick={() => handleOpenInfoModal(album, 'lyrics')}
-                        className="px-1.5 py-0.5 bg-[#fff5ee] hover:bg-[#ffe8dc] text-[#ff6b2b] border border-[#ffd8c2] rounded font-semibold text-[10px] sm:text-[11px] whitespace-nowrap transition-colors cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenInfoModal(album, 'lyrics');
+                        }}
+                        className="px-1 py-0.5 bg-[#ff6b2b]/35 hover:bg-[#ff6b2b]/55 text-[#ffd0b5] border border-[#ff6b2b]/50 rounded font-medium text-[8.5px] sm:text-[9.5px] whitespace-nowrap transition-colors cursor-pointer backdrop-blur-xs"
                         title="한글 가사 및 원문 가사 보기"
                       >
                         가사
                       </button>
 
-                      {/* 재생 횟수: 곡정보 가사 5회 로 표시 */}
+                      {/* R2 링크 수작업 등록 버튼 (미등록 시 원클릭 등록 버튼 노출) */}
+                      {isAdmin && (!album.audioUrl || album.audioUrl.trim() === '') && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openQuickLinkModal(album);
+                          }}
+                          className="px-1 py-0.5 bg-[#ea580c] hover:bg-[#c2410c] text-white border border-amber-300/80 rounded font-bold text-[8px] sm:text-[9px] whitespace-nowrap transition-transform active:scale-95 cursor-pointer backdrop-blur-xs flex items-center gap-0.5 shadow-xs"
+                          title="Cloudflare R2 스트리밍 링크 수작업 등록"
+                        >
+                          <Link className="w-2.5 h-2.5" />
+                          <span>R2등록</span>
+                        </button>
+                      )}
+
+                      {/* 횟수 배지 - 좌우 패딩을 줄여 삭제(휴지통) 버튼이 항상 넉넉하게 노출되도록 최적화 */}
                       <span
-                        className="text-[10px] sm:text-[11px] font-mono font-medium text-[#64748b] bg-[#f1f5f9] px-1.5 py-0.5 rounded border border-[#e2e8f0] whitespace-nowrap"
+                        className="text-[8.5px] sm:text-[9.5px] font-medium text-purple-200 bg-black/50 px-0.5 sm:px-1 py-0.5 rounded border border-white/15 whitespace-nowrap"
                         title={`누적 재생 ${album.playCount || 0}회`}
                       >
                         {album.playCount || 0}회
@@ -1543,37 +2122,44 @@ And kneel and say an Ave there for me.`);
                     </div>
 
                     {isAdmin && (
-                      <div className="flex items-center gap-0.5">
+                      <div className="flex items-center gap-0.5 shrink-0">
                         <button
                           type="button"
-                          onClick={() => onUpdateAlbum(album.id, { pinned: !album.pinned })}
-                          className={`p-1 rounded text-xs transition-colors cursor-pointer ${
-                            album.pinned ? 'text-[#ff6b2b] bg-[#fff5ee]' : 'text-[#94a3b8] hover:text-[#ff6b2b]'
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onUpdateAlbum(album.id, { pinned: !album.pinned });
+                          }}
+                          className={`p-0.5 rounded transition-colors cursor-pointer ${
+                            album.pinned ? 'text-[#ff6b2b] bg-white/20' : 'text-white/70 hover:text-[#ff6b2b]'
                           }`}
                           title={album.pinned ? '대표작 해제' : '대표작 지정'}
                         >
-                          <Pin className="w-3.5 h-3.5 fill-current" />
+                          <Pin className="w-3 h-3 fill-current" />
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setInfoModalAlbum(album);
                             setInfoModalTab('details');
                             setIsEditingInfo(true);
                             setEditedAlbum({ ...album });
                           }}
-                          className="p-1 text-[#94a3b8] hover:text-[#7c3aed] rounded transition-colors cursor-pointer"
+                          className="p-0.5 text-white/70 hover:text-white rounded transition-colors cursor-pointer"
                           title="수정하기"
                         >
-                          <Edit3 className="w-3.5 h-3.5" />
+                          <Edit3 className="w-3 h-3" />
                         </button>
                         <button
                           type="button"
-                          onClick={() => setAlbumToDelete(album)}
-                          className="p-1 text-[#94a3b8] hover:text-red-600 rounded transition-colors cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAlbumToDelete(album);
+                          }}
+                          className="p-0.5 text-white/70 hover:text-red-400 rounded transition-colors cursor-pointer"
                           title="삭제하기"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-3 h-3" />
                         </button>
                       </div>
                     )}
@@ -2475,10 +3061,10 @@ And kneel and say an Ave there for me.`);
       {/* ========================================================================= */}
       {/* MODAL: ADD NEW CD ALBUM & TRACK */}
       {/* ========================================================================= */}
-      {isAddModalOpen && isAdmin && (
+      {isAddModalVisible && isAdmin && (
         <div
           className="fixed inset-0 z-50 bg-black/60 backdrop-blur-2xs flex items-center justify-center p-3 animate-fadeIn"
-          onClick={() => setIsAddModalOpen(false)}
+          onClick={handleCloseAddModal}
         >
           <div
             className="bg-white border border-[#cbd5e1] rounded-2xl max-w-xl w-full p-5 shadow-2xl flex flex-col max-h-[90vh] overflow-y-auto"
@@ -2501,14 +3087,117 @@ And kneel and say an Ave there for me.`);
 
               <button
                 type="button"
-                onClick={() => setIsAddModalOpen(false)}
+                onClick={handleCloseAddModal}
                 className="text-[#94a3b8] hover:text-[#0f172a] p-1 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmitNewAlbum} className="flex flex-col gap-4 text-xs">
+            {/* Tab Switcher: 50~100곡 일괄 드래그 등록 vs 단일 곡 직접 등록 */}
+            <div className="flex border-b border-[#e2e8f0] mb-4 gap-2">
+              <button
+                type="button"
+                onClick={() => setAddModalTab('batch')}
+                className={`pb-2.5 px-3 text-xs font-bold transition-all border-b-2 flex items-center gap-1.5 cursor-pointer ${
+                  addModalTab === 'batch'
+                    ? 'border-[#ff6b2b] text-[#ea580c]'
+                    : 'border-transparent text-[#64748b] hover:text-[#0f172a]'
+                }`}
+              >
+                <UploadCloud className="w-4 h-4" />
+                <span>⚡ 다중 음원 드래그 일괄 등록 (50~100곡)</span>
+                <span className="text-[10px] bg-orange-100 text-orange-800 px-1.5 py-0.2 rounded-full font-extrabold">
+                  아이튠즈 방식
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAddModalTab('single')}
+                className={`pb-2.5 px-3 text-xs font-bold transition-all border-b-2 flex items-center gap-1.5 cursor-pointer ${
+                  addModalTab === 'single'
+                    ? 'border-[#7c3aed] text-[#7c3aed]'
+                    : 'border-transparent text-[#64748b] hover:text-[#0f172a]'
+                }`}
+              >
+                <FileAudio className="w-4 h-4" />
+                <span>📝 단일 곡 상세 직접 등록</span>
+              </button>
+            </div>
+
+            {addModalTab === 'batch' ? (
+              <div className="flex flex-col gap-4 text-xs">
+                {/* Big Drag & Drop Zone inside modal */}
+                <div
+                  onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  onDrop={async (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const files = await extractFilesFromDataTransfer(e.dataTransfer);
+                    if (files.length > 0) {
+                      processBatchFiles(files);
+                    }
+                  }}
+                  className="border-3 border-dashed border-[#ff6b2b] bg-linear-to-b from-orange-50/70 to-purple-50/50 rounded-2xl p-7 flex flex-col items-center justify-center text-center gap-3 transition-colors hover:border-[#ea580c] hover:bg-orange-50/90"
+                >
+                  <div className="w-16 h-16 rounded-2xl bg-linear-to-tr from-[#ff6b2b] to-[#7c3aed] flex items-center justify-center text-white shadow-lg animate-pulse">
+                    <UploadCloud className="w-8 h-8" />
+                  </div>
+
+                  <div>
+                    <h4 className="text-base font-black text-[#0f172a] mb-1">
+                      이곳에 음원 파일(MP3, M4A 등 50~100곡)을 드래그하여 놓으세요!
+                    </h4>
+                    <p className="text-xs text-[#64748b] max-w-md leading-relaxed">
+                      윈도우 탐색기에서 등록할 음원 파일들을 마우스로 다중 선택하여 이 창에 끌어다 놓으시면,<br />
+                      화일 내 ID3 태그(곡명, 가수, 앨범, 트랙, 장르, 연도, 가사, 앨범커버)를 자동 추출하여 앨범 목록을 즉시 완성합니다.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 mt-2 flex-wrap justify-center">
+                    <button
+                      type="button"
+                      onClick={() => multiFileInputRef.current?.click()}
+                      className="px-4 py-2.5 bg-[#ff6b2b] hover:bg-[#ea580c] text-white rounded-xl font-bold text-xs shadow-md flex items-center gap-1.5 transition-transform active:scale-95 cursor-pointer"
+                    >
+                      <UploadCloud className="w-4 h-4" />
+                      <span>PC에서 음원 파일 다중 선택하기 (50~100곡)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => folderInputRef.current?.click()}
+                      className="px-4 py-2.5 bg-white hover:bg-gray-50 text-[#334155] border border-[#cbd5e1] rounded-xl font-bold text-xs shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <FolderPlus className="w-4 h-4 text-[#0284c7]" />
+                      <span>상위 폴더 통째로 선택하기</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Information Card */}
+                <div className="p-3 bg-[#f8fafc] border border-[#e2e8f0] rounded-xl flex flex-col gap-2">
+                  <div className="font-bold text-[#334155] flex items-center gap-1.5 text-xs">
+                    <Sparkles className="w-4 h-4 text-[#7c3aed]" />
+                    <span>일괄 등록 및 Cloudflare R2 링크 안내</span>
+                  </div>
+                  <ul className="text-[11px] text-[#64748b] list-disc list-inside space-y-1.5 leading-relaxed">
+                    <li>
+                      <strong>지원 형식:</strong> MP3, M4A, FLAC, WAV, AAC, OGG 등 모든 주요 오디오 파일 지원
+                    </li>
+                    <li>
+                      <strong>자동 추출 항목:</strong> 제목, 아티스트, 앨범, 앨범 아티스트, 트랙 번호, 장르, 연도, 비트 전송률(192kbps 등), 샘플 속도(44.1kHz), 재생 시간, USLT 가사, 임베디드 앨범 커버 아트
+                    </li>
+                    <li>
+                      <strong>Cloudflare R2 스트리밍 링크:</strong> 일괄 등록 시 링크는 비워둔 상태로 앨범이 완성되며, 등록 후 각 앨범의 <strong>[R2등록]</strong> 버튼이나 상단 배너의 <strong>[순차적으로 링크 등록하기]</strong>를 통해 편리하게 개별 수작업 등록하실 수 있습니다.
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmitNewAlbum} className="flex flex-col gap-4 text-xs">
               {/* Quick Preset for User's Screenshot ("08 Danny Boy.mp3") */}
               <div className="flex items-center justify-between bg-[#f5f3ff] border border-[#ddd6fe] rounded-lg p-2.5">
                 <div className="flex items-center gap-1.5 text-[#5b21b6]">
@@ -2899,7 +3588,7 @@ And kneel and say an Ave there for me.`);
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#f1f5f9]">
                 <button
                   type="button"
-                  onClick={() => setIsAddModalOpen(false)}
+                  onClick={handleCloseAddModal}
                   className="px-4 py-2 border border-[#cbd5e1] text-[#475569] rounded-lg font-bold hover:bg-[#f1f5f9] cursor-pointer"
                 >
                   취소
@@ -2929,6 +3618,316 @@ And kneel and say an Ave there for me.`);
                 </button>
               </div>
             </form>
+          )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: BATCH EXTRACTION PROGRESS & RESULTS MODAL */}
+      {/* ========================================================================= */}
+      {isBatchProcessing && (
+        <div className="fixed inset-0 z-60 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 animate-fadeIn">
+          <div className="bg-white border border-[#cbd5e1] rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl flex flex-col gap-4 text-xs">
+            <div className="flex items-center justify-between pb-3 border-b border-[#e2e8f0]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-linear-to-tr from-[#ff6b2b] to-[#7c3aed] text-white flex items-center justify-center shadow-md">
+                  <Disc3 className="w-5 h-5 animate-spin" style={{ animationDuration: '4s' }} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-[#0f172a]">
+                    {isBatchCompleted ? '🎉 음원 일괄 자동 등록 완료!' : '⚡ 음원 일괄 자동 분석 및 등록 중'}
+                  </h3>
+                  <p className="text-[11px] text-[#64748b]">
+                    {isBatchCompleted
+                      ? `총 ${batchResults.length}곡의 앨범이 라이브러리에 등록되었습니다.`
+                      : '파일의 ID3 태그, 앨범 커버, 오디오 기술 속성값을 정밀 추출하고 있습니다.'}
+                  </p>
+                </div>
+              </div>
+              {isBatchCompleted && (
+                <button
+                  type="button"
+                  onClick={() => setIsBatchProcessing(false)}
+                  className="p-1 text-gray-400 hover:text-gray-700 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+
+            {/* Progress Bar & Counter */}
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between text-xs font-mono font-bold">
+                <span className="text-[#334155] truncate max-w-[280px]">
+                  {isBatchCompleted ? '모든 음원 등록 완료' : `분석 중: ${batchProgress.currentTitle}`}
+                </span>
+                <span className="text-[#7c3aed]">
+                  {batchProgress.current} / {batchProgress.total}곡 ({Math.round((batchProgress.current / (batchProgress.total || 1)) * 100)}%)
+                </span>
+              </div>
+              <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden border border-gray-200 shadow-inner">
+                <div
+                  className="h-full bg-linear-to-r from-[#ff6b2b] via-[#9333ea] to-[#7c3aed] transition-all duration-150"
+                  style={{ width: `${Math.round((batchProgress.current / (batchProgress.total || 1)) * 100)}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Extracted Tracks Preview List */}
+            <div className="max-h-60 overflow-y-auto border border-[#e2e8f0] rounded-xl p-2 flex flex-col gap-1.5 bg-[#f8fafc] custom-retro-scrollbar">
+              {batchResults.length === 0 ? (
+                <div className="text-center py-8 text-gray-400">
+                  음원 태그 분석을 시작합니다...
+                </div>
+              ) : (
+                batchResults.map((item, idx) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between p-2 bg-white rounded-lg border border-[#e2e8f0] shadow-2xs text-[11px]"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <img
+                        src={item.coverImageUrl || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=100&q=80'}
+                        alt=""
+                        className="w-8 h-8 rounded object-cover border border-gray-200 shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <p className="font-bold text-[#0f172a] truncate leading-tight">
+                          {idx + 1}. {item.songTitle}
+                        </p>
+                        <p className="text-[#64748b] text-[10px] truncate leading-tight mt-0.5">
+                          {item.artist} · {item.albumTitle}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[10px] font-mono text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+                        {item.formattedDuration}
+                      </span>
+                      <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-0.5">
+                        <Check className="w-3 h-3" />
+                        완료
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Notice & Close Button */}
+            {isBatchCompleted ? (
+              <div className="flex flex-col gap-3 pt-2">
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 flex items-start gap-2">
+                  <Radio className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="text-[11px] leading-relaxed">
+                    <strong>일괄 등록이 성공적으로 완료되었습니다!</strong>
+                    <p className="mt-0.5 text-amber-800">
+                      요청하신 대로 Cloudflare R2 링크는 비워둔 상태로 앨범이 완성되었습니다. 이제 각 앨범의 <strong>[R2등록]</strong> 버튼을 누르시거나 아래 버튼을 통해 <strong>수작업으로 개별 등록</strong>하실 수 있습니다.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsBatchProcessing(false)}
+                    className="px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-lg cursor-pointer transition-colors"
+                  >
+                    목록 확인하기
+                  </button>
+                  {batchResults.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsBatchProcessing(false);
+                        openQuickLinkModal(batchResults[0]);
+                      }}
+                      className="px-4 py-2 bg-[#ff6b2b] hover:bg-[#ea580c] text-white font-bold rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                    >
+                      <Link className="w-3.5 h-3.5" />
+                      <span>R2 링크 순차 등록 시작 ➔</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center text-[11px] text-gray-500 py-1">
+                잠시만 기다려주세요. 음원 태그 추출 및 앨범 등록을 진행 중입니다...
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: QUICK INDIVIDUAL CLOUDFLARE R2 LINK REGISTRATION MODAL */}
+      {/* ========================================================================= */}
+      {quickLinkModalAlbum && (
+        <div
+          className="fixed inset-0 z-60 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 animate-fadeIn"
+          onClick={() => {
+            if (quickLinkAudioRef.current) {
+              quickLinkAudioRef.current.pause();
+              quickLinkAudioRef.current = null;
+            }
+            setQuickLinkPlaying(false);
+            setQuickLinkModalAlbum(null);
+          }}
+        >
+          <div
+            className="bg-white border border-[#cbd5e1] rounded-2xl max-w-lg w-full p-5 shadow-2xl flex flex-col gap-4 text-xs"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-[#e2e8f0]">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-[#ea580c] text-white flex items-center justify-center shadow-xs">
+                  <Radio className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-[#0f172a]">
+                    Cloudflare R2 스트리밍 링크 수작업 등록
+                  </h3>
+                  <p className="text-[11px] text-[#64748b]">
+                    방문자가 재생(Play) 버튼을 누를 때 스트리밍될 Cloudflare R2 주소를 입력합니다.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (quickLinkAudioRef.current) {
+                    quickLinkAudioRef.current.pause();
+                    quickLinkAudioRef.current = null;
+                  }
+                  setQuickLinkPlaying(false);
+                  setQuickLinkModalAlbum(null);
+                }}
+                className="text-gray-400 hover:text-gray-700 p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Target Album Info Card */}
+            <div className="p-3 bg-[#f8fafc] border border-[#e2e8f0] rounded-xl flex items-center gap-3">
+              <img
+                src={quickLinkModalAlbum.coverImageUrl || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=200&q=80'}
+                alt=""
+                className="w-14 h-14 rounded-lg object-cover border border-gray-200 shadow-xs shrink-0"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] bg-purple-100 text-purple-800 font-bold px-1.5 py-0.5 rounded">
+                    Tr.{quickLinkModalAlbum.trackNumber || 1}
+                  </span>
+                  <h4 className="font-bold text-sm text-[#0f172a] truncate">
+                    {quickLinkModalAlbum.songTitle}
+                  </h4>
+                </div>
+                <p className="text-xs text-[#475569] mt-0.5 truncate">
+                  {quickLinkModalAlbum.artist} · {quickLinkModalAlbum.albumTitle}
+                </p>
+                {quickLinkModalAlbum.audioFileName && (
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <span className="text-[10px] text-gray-500 font-mono truncate max-w-[200px]" title="매칭할 오디오 파일명">
+                      📁 {quickLinkModalAlbum.audioFileName}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(quickLinkModalAlbum.audioFileName || '');
+                        alert(`파일명이 복사되었습니다: ${quickLinkModalAlbum.audioFileName}`);
+                      }}
+                      className="text-[9px] bg-gray-200 hover:bg-gray-300 px-1.5 py-0.5 rounded text-gray-700 cursor-pointer font-sans"
+                    >
+                      파일명 복사
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* URL Input Form */}
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <label className="font-bold text-xs text-[#0f172a] flex items-center gap-1">
+                  <Link className="w-3.5 h-3.5 text-[#ea580c]" />
+                  <span>Cloudflare R2 음원 URL 주소</span>
+                </label>
+                <span className="text-[10px] text-purple-700 font-mono">
+                  .mp3 / .m4a 스트리밍 링크
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="url"
+                  value={quickLinkUrl}
+                  onChange={(e) => setQuickLinkUrl(e.target.value)}
+                  placeholder="예: https://pub-xxxxxx.r2.dev/music/08_Danny_Boy.mp3"
+                  className="flex-1 p-2.5 bg-white border border-[#cbd5e1] rounded-lg font-mono text-xs text-[#0f172a] outline-hidden focus:border-[#ea580c] focus:ring-1 focus:ring-[#ea580c] shadow-2xs"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={handleToggleTestPlay}
+                  disabled={!quickLinkUrl.trim()}
+                  className={`px-3 py-2.5 rounded-lg font-bold text-xs flex items-center gap-1 transition-all cursor-pointer shrink-0 ${
+                    quickLinkPlaying
+                      ? 'bg-rose-600 text-white animate-pulse'
+                      : quickLinkUrl.trim()
+                      ? 'bg-purple-100 hover:bg-purple-200 text-purple-800'
+                      : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  }`}
+                  title="입력한 URL로 음원이 재생되는지 테스트합니다."
+                >
+                  {quickLinkPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                  <span>{quickLinkPlaying ? '정지' : '미리듣기'}</span>
+                </button>
+              </div>
+              <p className="text-[10px] text-[#64748b]">
+                💡 방문자가 재생(Play) 버튼을 누르면 이 R2 주소로 즉시 고음질 스트리밍됩니다.
+              </p>
+            </div>
+
+            {/* Navigation & Action Buttons */}
+            <div className="flex items-center justify-between pt-2 border-t border-[#e2e8f0]">
+              <button
+                type="button"
+                onClick={() => {
+                  if (quickLinkAudioRef.current) {
+                    quickLinkAudioRef.current.pause();
+                    quickLinkAudioRef.current = null;
+                  }
+                  setQuickLinkPlaying(false);
+                  setQuickLinkModalAlbum(null);
+                }}
+                className="px-3 py-1.5 text-gray-500 hover:text-gray-800 font-medium cursor-pointer"
+              >
+                취소
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleSaveQuickLink(false)}
+                  className="px-3.5 py-1.5 bg-white hover:bg-gray-50 border border-gray-300 text-gray-800 font-bold rounded-lg shadow-2xs transition-colors cursor-pointer"
+                >
+                  저장
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleSaveQuickLink(true)}
+                  className="px-4 py-1.5 bg-[#ea580c] hover:bg-[#c2410c] text-white font-bold rounded-lg shadow-xs flex items-center gap-1 transition-transform active:scale-95 cursor-pointer"
+                  title="현재 곡 링크를 저장하고 바로 다음 미등록 곡으로 이동합니다."
+                >
+                  <span>저장 후 다음 곡으로</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -3111,10 +4110,10 @@ And kneel and say an Ave there for me.`);
         </div>
       )}
       {/* Multi-Device Backup & Restore Modal */}
-      {isBackupModalOpen && (
+      {isBackupModalVisible && (
         <div
           className="fixed inset-0 z-70 bg-black/60 backdrop-blur-2xs flex items-center justify-center p-4 animate-fadeIn"
-          onClick={() => setIsBackupModalOpen(false)}
+          onClick={handleCloseBackupModal}
         >
           <div
             className="bg-white border-2 border-indigo-500 rounded-2xl max-w-lg w-full p-4 sm:p-5 shadow-2xl flex flex-col gap-3.5 max-h-[90vh] overflow-y-auto"
@@ -3136,7 +4135,7 @@ And kneel and say an Ave there for me.`);
               </div>
               <button
                 type="button"
-                onClick={() => setIsBackupModalOpen(false)}
+                onClick={handleCloseBackupModal}
                 className="text-gray-400 hover:text-gray-600 p-1 cursor-pointer"
               >
                 <X className="w-4 h-4" />
@@ -3235,7 +4234,7 @@ And kneel and say an Ave there for me.`);
             <div className="flex justify-end pt-1 border-t border-gray-200">
               <button
                 type="button"
-                onClick={() => setIsBackupModalOpen(false)}
+                onClick={handleCloseBackupModal}
                 className="px-4 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded text-xs font-bold cursor-pointer"
               >
                 닫기
